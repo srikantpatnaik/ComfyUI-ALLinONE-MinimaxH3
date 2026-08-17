@@ -1,5 +1,7 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
+import { h3TextEncoderItems } from "./h3_model_features.js";
+import { createOutputControls, normalizeOutputSettings, outputFrameLabel, patchOutputVideo } from "./h3_output_features.js";
 
 const ACCENT_DEFAULT = "#c0a996";
 const SUPPORT_URL = "https://ko-fi.com/leonq8";
@@ -86,8 +88,8 @@ const DEFAULT_MODELS = {
   upscaleVae:"none",
 };
 
-function snapFrames(seconds){
-  const base = Math.max(5, Math.round(seconds * 24));
+function snapFrames(seconds, fps=24){
+  const base = Math.max(5, Math.round(seconds * fps));
   return base + ((5 - (base % 17)) + 17) % 17;
 }
 
@@ -766,6 +768,7 @@ app.registerExtension({
           models:          Object.assign({}, DEFAULT_MODELS, saved.models||{}),
           speedLora:       saved.speedLora||"",
           audioOn:         saved.audioOn!==undefined?saved.audioOn:true,
+          ...normalizeOutputSettings(saved),
           soundEnabled:    saved.soundEnabled!==undefined?saved.soundEnabled:true,
           sound:           saved.sound||"chime",
           accent:          (saved.accent&&saved.accent!=="#f0ff41"&&saved.accent.toLowerCase()!=="#00e5ff")?saved.accent:ACCENT_DEFAULT,
@@ -819,7 +822,7 @@ app.registerExtension({
           refImages:S.refImages,refVideos:S.refVideos,refAudios:S.refAudios,
           audioFile:S.audioFile,extendVideo:S.extendVideo,
           kf:(S.kf||[]).map(k=>({img:k.img||null,pos:k.pos||0})),
-          models:S.models,speedLora:S.speedLora,audioOn:S.audioOn,
+          models:S.models,speedLora:S.speedLora,audioOn:S.audioOn,fps:S.fps,rifeMultiplier:S.rifeMultiplier,
           soundEnabled:S.soundEnabled,sound:S.sound,accent:S.accent,mcLength:S.mcLength,
           upscaleFactor:S.upscaleFactor,upscaleMethod:S.upscaleMethod,
           modeSettings:S.modeSettings,
@@ -2206,6 +2209,7 @@ app.registerExtension({
       const framesLbl=mk("div",{fontSize:"9px",color:C.muted,flexShrink:"0"});
       durInner.append(durNI,framesLbl);
       durRow.append(durCap,durInner);
+      const {fpsRow,rifeRow}=createOutputControls({S,mk,tx,infoIcon,NI,DD,persist,updateFramesLabel:()=>_updateFramesLabel()});
       const stepsRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
       const stepsCap=mk("div",{fontSize:"10px",color:C.text});tx(stepsCap,"Steps");
       const stepsNI=NI("",S.steps,1,60,1,v=>{S.steps=Math.round(v);persist();},"60px");
@@ -2269,7 +2273,7 @@ app.registerExtension({
       schedCapRow.append(schedCap,infoIcon("The noise schedule. MiniMax H3's native workflows use simple - keep it unless you know why you're changing it."));
       const schedDD=DD(SCHEDULERS,S.schedulerName||"simple",v=>{S.schedulerName=v;persist();});
       schedRow.append(schedCapRow,schedDD.el);
-      params.append(resRow,durRow,stepsRow,qualRow,samplerRow,schedRow);
+      params.append(resRow,durRow,fpsRow,rifeRow,stepsRow,qualRow,samplerRow,schedRow);
 
       // Custom sampling controls for Image mode (shown when the profile is Custom)
       const imgAdvRow=mk("div",{display:"none",flexDirection:"column",gap:"7px"});
@@ -3250,10 +3254,10 @@ app.registerExtension({
         wf["3"].inputs.vae_name=S.models.vaeVideo;
         wf["4"].inputs.vae_name=S.models.vaeAudio;
         const res=_resolveRes();
-        let frames=snapFrames(S.duration);
+        let frames=snapFrames(S.duration,S.fps);
         if(S.mode==="extend"){
           const EXT_CONTEXT=90;
-          frames=snapFrames(S.duration+EXT_CONTEXT/24);
+          frames=snapFrames(S.duration+EXT_CONTEXT/24,S.fps);
         }
         condNode.inputs.prompt=_finalPrompt(S.prompt);
         condNode.inputs.width=res.width;
@@ -3278,6 +3282,7 @@ app.registerExtension({
           },_meta:{title:"Live Preview (TAEH3)"}};
           wf["5"].inputs.model=["lp",0];
         }
+        patchOutputVideo(wf,S.fps,S.rifeMultiplier);
         _applyAutoSave(wf);
         _insertCacheBust(wf);
         return {frames,res};
@@ -3460,7 +3465,7 @@ app.registerExtension({
             wf["7"].inputs.conditioning=[kfId,0];
           }
         } else if(mode==="keyframes"){
-          const totalFrames=snapFrames(S.duration);
+          const totalFrames=snapFrames(S.duration,S.fps);
           const positions=[];
           let imgNum=0;
           S.kf.forEach((k)=>{
@@ -3506,7 +3511,7 @@ app.registerExtension({
           const mc=out["c"+idx+":mc"];
           const trim=out["c"+idx+":trim"];
           const save=out["c"+idx+":save"];
-          const frames=snapFrames(cl.duration);
+          const frames=snapFrames(cl.duration,S.fps);
           cond.inputs.prompt=_finalPrompt(cl.prompt, idx===0?"t2v":undefined);
           cond.inputs.width=res.width;
           cond.inputs.height=res.height;
@@ -3605,6 +3610,7 @@ app.registerExtension({
             if(cond&&cond.inputs&&Array.isArray(cond.inputs.clip)) cond.inputs.clip=["s:bust",0];
           });
         }
+        patchOutputVideo(wf,S.fps,S.rifeMultiplier);
         _applyAutoSave(wf);
         return wf;
       };
@@ -3692,8 +3698,7 @@ app.registerExtension({
           const d=await r.json();
           _M={diffusion:d.diffusion_models||[],text_encoders:d.text_encoders||[],vaes:d.vaes||[],loras:d.loras||[]};
           const has=(arr,v)=>arr.some(m=>(m||"").toLowerCase()===(v||"").toLowerCase());
-          const h3ClipItems=_M.text_encoders.filter(m=>/qwen3vl_32b_minimax_h3/i.test(m||""));
-          const clipItems=h3ClipItems.length?h3ClipItems:_M.text_encoders;
+          const clipItems=h3TextEncoderItems(_M.text_encoders);
           if(!has(clipItems,S.models.clip)) S.models.clip=_pickModel(clipItems,"qwen3vl_32b_minimax_h3");
           if(!has(_M.diffusion,S.models.unetT2V)) S.models.unetT2V=_pickModel(_M.diffusion,"fl2va");
           if(!has(_M.diffusion,S.models.unetR2V)) S.models.unetR2V=_pickModel(_M.diffusion,"ref2va");
@@ -3740,7 +3745,7 @@ app.registerExtension({
           _discTmpl=d.prompt_templates||{};
         }catch(e){console.warn("[H3One] load config:",e);}
       };
-      const _updateFramesLabel=()=>{ tx(framesLbl,`= ${snapFrames(S.duration)} frames @ 24fps`); };
+      const _updateFramesLabel=()=>{ tx(framesLbl,outputFrameLabel(S.duration,S.fps,S.rifeMultiplier,(seconds)=>snapFrames(seconds,S.fps))); };
       _updateFramesLabel();
       _loadModels();
       _loadConfig();
