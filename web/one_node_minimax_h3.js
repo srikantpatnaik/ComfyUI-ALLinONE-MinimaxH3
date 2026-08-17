@@ -3319,7 +3319,7 @@ app.registerExtension({
         if(!caps.attention&&!caps.ffn) return modelSrc;
         const res=S._generationRes||_resolveRes();
         const megapixels=(Number(res.width)*Number(res.height))/1000000;
-        if(!(megapixels>=0.9)) return modelSrc;
+        if(!(megapixels>=0.7)) return modelSrc;
         const chunks=megapixels>=1.6?8:4;
         if(caps.attention){
           const id=newId();
