@@ -752,7 +752,10 @@ const _finishRun=async()=>{
     tries++;
     await new Promise(res=>setTimeout(res,1500));
   }
+  const auto2K=!!(_activeNode&&_activeNode._h3_auto2KReady&&_activeNode._h3_S?.outputTarget==="2k");
+  if(_activeNode) _activeNode._h3_auto2KReady=false;
   _activeResetBtn?.();
+  if(auto2K) setTimeout(()=>_activeNode?._h3_autoUpscale?.(true),0);
   const S=_activeNode?._h3_S;
   if(S && S.soundEnabled!==false && S.sound!=="off") playDone(S.sound||"chime");
 };
@@ -852,6 +855,7 @@ app.registerExtension({
           customH:         saved.customH||544,
           upscaleFactor:   saved.upscaleFactor||2,
           upscaleMethod:   saved.upscaleMethod||"seedvr",
+          outputTarget:     saved.outputTarget==="2k"?"2k":"native",
           modeSettings:    (saved.modeSettings&&typeof saved.modeSettings==="object")?saved.modeSettings:{},
           autoSave:        saved.autoSave!==undefined?saved.autoSave:true,
           livePreview:     saved.livePreview===true,
@@ -901,6 +905,7 @@ app.registerExtension({
           models:S.models,speedLora:S.speedLora,audioOn:S.audioOn,fps:S.fps,rifeMultiplier:S.rifeMultiplier,
           soundEnabled:S.soundEnabled,sound:S.sound,accent:S.accent,mcLength:S.mcLength,
           upscaleFactor:S.upscaleFactor,upscaleMethod:S.upscaleMethod,
+          outputTarget:S.outputTarget,
           modeSettings:S.modeSettings,
           autoSave:S.autoSave,customW:S.customW,customH:S.customH,
           playOnFinish:S.playOnFinish,folded:S.folded,livePreview:S.livePreview,
@@ -2315,6 +2320,15 @@ app.registerExtension({
       resCustom.append(resCW,resX,resCH,resMPLbl);
       resRow.appendChild(resCustom);
       const _updResCustom=()=>{ resCustom.style.display=S.resolution==="Custom"?"flex":"none"; _updResMP(); };
+      const outputRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
+      const outputCapRow=mk("div",{display:"flex",alignItems:"center",gap:"4px"});
+      const outputCap=mk("div",{fontSize:"10px",color:C.text});tx(outputCap,"Output size");
+      outputCapRow.append(outputCap,infoIcon("Native render keeps H3's diffusion canvas and is the safest path for limited VRAM.\n2K output renders H3 at a VRAM-safe canvas first, then automatically upscales the finished video to a maximum 2048px long edge. It does not ask H3 to sample natively at 2K."));
+      const outputDD=DD(["Native render","2K output (safe upscale)"],S.outputTarget==="2k"?"2K output (safe upscale)":"Native render",v=>{
+        S.outputTarget=v.startsWith("2K")?"2k":"native";
+        persist();
+      });
+      outputRow.append(outputCapRow,outputDD.el);
       const durRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
       const durCap=mk("div",{fontSize:"10px",color:C.text});tx(durCap,"Duration (s)");
       const durInner=mk("div",{display:"flex",alignItems:"center",gap:"8px"});
@@ -2386,7 +2400,7 @@ app.registerExtension({
       schedCapRow.append(schedCap,infoIcon("The noise schedule. MiniMax H3's native workflows use simple - keep it unless you know why you're changing it."));
       const schedDD=DD(SCHEDULERS,S.schedulerName||"simple",v=>{S.schedulerName=v;persist();});
       schedRow.append(schedCapRow,schedDD.el);
-      params.append(resRow,durRow,fpsRow,rifeRow,stepsRow,qualRow,samplerRow,schedRow);
+      params.append(resRow,outputRow,durRow,fpsRow,stepsRow,qualRow,samplerRow,schedRow);
 
       // Custom sampling controls for Image mode (shown when the profile is Custom)
       const imgAdvRow=mk("div",{display:"none",flexDirection:"column",gap:"7px"});
@@ -2968,7 +2982,11 @@ app.registerExtension({
           _updateTimeBar(item.filename);
           return;
         }
-        vidEl.onloadedmetadata=()=>_updateResolutionChip(vidEl.videoWidth,vidEl.videoHeight);
+        vidEl.onloadedmetadata=()=>{
+          self._h3_lastOutputSize={width:vidEl.videoWidth,height:vidEl.videoHeight};
+          _updateResolutionChip(vidEl.videoWidth,vidEl.videoHeight);
+        };
+        self._h3_lastOutputSize=null;
         vidEl.src=url;vidEl.style.display="block";imgEl.style.display="none";
         placeholder.style.display="none";errorBox.style.display="none";
         _updateSeedChip(item.filename);
@@ -3017,7 +3035,17 @@ app.registerExtension({
         _curItem=null;
         _loadGallery();
       };
-      const _runUpscale=async()=>{
+      const _target2KSize=()=>{
+        const outputSize=self._h3_lastOutputSize||S._generationRes||_resolveRes();
+        const width=Math.round(Number(vidEl.videoWidth)||Number(outputSize?.width)||0);
+        const height=Math.round(Number(vidEl.videoHeight)||Number(outputSize?.height)||0);
+        if(!(width>0&&height>0)) throw new Error("Could not read the generated video's dimensions");
+        const scale=Math.min(2048/Math.max(width,height),1);
+        const targetWidth=Math.max(8,Math.floor((width*scale)/8)*8);
+        const targetHeight=Math.max(8,Math.floor((height*scale)/8)*8);
+        return {width:targetWidth,height:targetHeight,shortEdge:Math.min(targetWidth,targetHeight)};
+      };
+      const _runUpscale=async(target2K=false)=>{
         if(!_curItem||S.generating) return;
         const rtx=S.upscaleMethod==="rtx";
         if(!rtx && (!S.models.upscaleDit||S.models.upscaleDit==="none"||!S.models.upscaleVae||S.models.upscaleVae==="none")){
@@ -3025,7 +3053,7 @@ app.registerExtension({
           showError("Upscale needs a SeedVR2 model. Open Settings, then pick an Upscale DiT model + Upscale VAE - or switch the Upscale method to RTX VSR, which needs no model.");
           return;
         }
-        _upscaleRun=rtx?"upscale-rtx":"upscale-seedvr2";
+        _upscaleRun=target2K?(rtx?"upscale-2k-rtx":"upscale-2k-seedvr2"):(rtx?"upscale-rtx":"upscale-seedvr2");
         _upOrig=_curItem?{filename:_curItem.filename,subfolder:_curItem.subfolder||""}:null;
         S.generating=true;
         _activeGenStartTs=Date.now();
@@ -3035,18 +3063,40 @@ app.registerExtension({
         genBtn.disabled=true;tx(genBtnLbl,"Upscaling...");
         progWrap.style.display="flex";setStage("Preparing upscale...",3);
         try{
+          if(target2K&&!vidEl.videoWidth){
+            await new Promise(resolve=>{
+              let timer=setTimeout(resolve,1500);
+              vidEl.addEventListener("loadedmetadata",()=>{clearTimeout(timer);resolve();},{once:true});
+            });
+          }
           const stage=await fetch("/h3one/stage_input",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:_curItem.filename,subfolder:_curItem.subfolder||""})});
           const sd=await stage.json();
           if(!sd.ok) throw new Error(sd.error||"Could not prepare the video for upscale");
           const wf=await _fetchTpl(rtx?"upscale_rtx.json":"upscale.json");
           wf["1"].inputs.file=sd.name;
           if(rtx){
-            wf["3"].inputs["resize_type.scale"]=S.upscaleFactor;
+            if(target2K){
+              const size=_target2KSize();
+              wf["3"].inputs.resize_type="target dimensions";
+              delete wf["3"].inputs["resize_type.scale"];
+              wf["3"].inputs["resize_type.width"]=size.width;
+              wf["3"].inputs["resize_type.height"]=size.height;
+            }else{
+              wf["3"].inputs["resize_type.scale"]=S.upscaleFactor;
+            }
           }else{
             wf["3"].inputs.model=S.models.upscaleDit;
             wf["4"].inputs.model=S.models.upscaleVae;
-            const resMap={2:1080,3:1440,4:2160};
-            wf["5"].inputs.resolution=resMap[S.upscaleFactor]||1080;
+            if(target2K){
+              const size=_target2KSize();
+              wf["5"].inputs.resolution=size.shortEdge;
+              wf["5"].inputs.max_resolution=2048;
+              wf["5"].inputs.batch_size=1;
+              wf["5"].inputs.uniform_batch_size=false;
+            }else{
+              const resMap={2:1080,3:1440,4:2160};
+              wf["5"].inputs.resolution=resMap[S.upscaleFactor]||1080;
+            }
           }
           _applyAutoSave(wf);
           const body={prompt:wf,client_id:api.clientId,extra_data:{enable_previews:true}};
@@ -3055,11 +3105,12 @@ app.registerExtension({
           if(data.error||!data.prompt_id) throw new Error(data.error?.message||"Unknown error");
           _batchIds=[data.prompt_id];_batchDone=0;_activePromptId=data.prompt_id;
           _armFinishWatch();
-          setStage(rtx?("Upscaling "+S.upscaleFactor+"x with RTX VSR..."):("Upscaling "+S.upscaleFactor+"x with SeedVR2 ("+S.models.upscaleDit+")..."),8);
+          setStage(target2K?(rtx?"Upscaling to 2K with RTX VSR...":"Upscaling to 2K with SeedVR2 ("+S.models.upscaleDit+")..."):(rtx?("Upscaling "+S.upscaleFactor+"x with RTX VSR..."):("Upscaling "+S.upscaleFactor+"x with SeedVR2 ("+S.models.upscaleDit+")...")),8);
         }catch(e){
           resetBtn();showError(fmtErr(e));
         }
       };
+      self._h3_autoUpscale=(target2K)=>_runUpscale(!!target2K);
       const _loadGallery=async()=>{
         galleryBox.innerHTML="";
         try{
@@ -3153,12 +3204,15 @@ app.registerExtension({
         _upscaleRun="";
         _activeShownFiles.push(item.filename);
         const isTemp=item.type==="temp";
+        if(!wasUpscale&&!isTemp&&S.outputTarget==="2k"&&S.mode!=="image") self._h3_auto2KReady=true;
         if(!wasUpscale&&!isTemp&&S.mode==="extend") _stageVideoForExtend(item,false);
         if(!isTemp){
           fetch("/h3one/set_output",{method:"POST",headers:{"Content-Type":"application/json"},
             body:JSON.stringify({node_id:self.id,info:{filename:item.filename,subfolder:item.subfolder||""}})}).catch(()=>{});
-          const histMode=wasUpscale?("Upscale "+S.upscaleFactor+"x ("+(wasUpscale==="upscale-rtx"?"RTX VSR":"SeedVR2")+")"):S.mode;
-          const histRes=wasUpscale?(S.upscaleFactor+"x upscale"):(S.mode==="image"?(S.imgLastW+"x"+S.imgLastH):S.resolution);
+          const upscale2K=wasUpscale&&wasUpscale.startsWith("upscale-2k");
+          const histMethod=wasUpscale&&wasUpscale.includes("rtx")?"RTX VSR":"SeedVR2";
+          const histMode=wasUpscale?(upscale2K?"2K upscale ("+histMethod+")":"Upscale "+S.upscaleFactor+"x ("+histMethod+")"):S.mode;
+          const histRes=wasUpscale?(upscale2K?"2K max edge":S.upscaleFactor+"x upscale"):(S.mode==="image"?(S.imgLastW+"x"+S.imgLastH):S.resolution);
            fetch("/h3one/history",{method:"POST",headers:{"Content-Type":"application/json"},
              body:JSON.stringify({
                mode:histMode,quality:wasUpscale?"":S.quality,prompt:(S.prompt||"").slice(0,2000),duration:wasUpscale?0:S.duration,
@@ -3772,6 +3826,7 @@ app.registerExtension({
 
       genBtn.onclick=async()=>{
         if(S.generating) return;
+        self._h3_auto2KReady=false;
         _upOrig=null;_upResult=null;
         if(_cmpMode) _exitCompare();
         _cmpImageRefs=S.mode==="image"&&["edit","refmix"].includes(S.imgSub)?(S.imgRefs||[]).filter(Boolean).slice(0,S.imgSub==="edit"?1:9):[];
@@ -3944,6 +3999,7 @@ app.registerExtension({
         }
         const r=_resolveRes();
         chip(null,`${r.width}×${r.height}`,true);
+        if(S.outputTarget==="2k") chip(null,"2K safe upscale",true);
         chip(null,S.mode==="chain"?`${S.chainClips.length} clips`:`${S.duration}s`,true);
         recipeEl.appendChild(mk("span",{}, {className:"h3-gsep","aria-hidden":"true"}));
         chip("steps",String(S.steps));
