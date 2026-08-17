@@ -10,8 +10,10 @@ This fork stays close to the upstream ALL-in-ONE MiniMax H3 node and keeps its c
 - **H3-safe text encoder selection** — the model picker prefers the Qwen encoder files intended for MiniMax H3. This prevents accidentally pairing H3 with an incompatible encoder and getting a matrix-shape error.
 - **Output FPS control** — choose the playback frame rate independently in the node settings. The requested duration is used when calculating the H3 frame count, so changing FPS does not unexpectedly lengthen the video.
 - **Optional RIFE interpolation** — select 1×, 2×, or 4× interpolation. The final playback FPS is adjusted together with the interpolated frame count, preserving the requested duration. This requires the `ComfyUI-Frame-Interpolation` pack and `rife49.pth`.
+- **Aspect-safe I2V inputs** — the I2V panel offers `Original`, `16:9`, and `9:16`. Source images are scaled down once and centered on the target canvas without stretching; forced ratios also change the H3 video canvas to the selected ratio.
+- **Extend from outputs** — right-click any video in the output strip or Library and choose **Send to Extend**. Completed Extend renders are automatically staged as the next Extend source, so they can be extended again without another manual upload.
 
-The additions are isolated in `web/h3_model_features.js` and `web/h3_output_features.js`; the main node file only contains the small integration points. Everything else below describes the upstream project.
+The additions are isolated in `web/h3_model_features.js`, `web/h3_output_features.js`, `web/h3_i2v_aspect.js`, `web/h3_output_context.js`, and `h3_i2v_aspect.py`; the main node file only contains the small integration points. Everything else below describes the upstream project.
 
 One node. The whole MiniMax H3 video pipeline.
 
