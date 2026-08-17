@@ -36,13 +36,17 @@ export function attachOutputContextMenu(card, item, { isVideo, onExtend }) {
       action.onmouseenter = () => { action.style.background = "var(--h3accent)"; action.style.color = "#141414"; };
       action.onmouseleave = () => { action.style.background = "transparent"; action.style.color = "var(--h3-tx)"; };
       action.onclick = async () => {
-        menu.remove();
+        close();
         await onExtend(item);
       };
     }
     menu.appendChild(action);
     document.body.appendChild(menu);
-    const dismiss = () => { menu.remove(); document.removeEventListener("pointerdown", dismiss); };
-    setTimeout(() => document.addEventListener("pointerdown", dismiss, { once: true }), 0);
+    const close = () => { menu.remove(); document.removeEventListener("pointerdown", dismiss); };
+    const dismiss = event => {
+      if (menu.contains(event.target)) return;
+      close();
+    };
+    setTimeout(() => document.addEventListener("pointerdown", dismiss), 0);
   });
 }
