@@ -3916,15 +3916,13 @@ app.registerExtension({
       _updateModeSections();
       _restoreModeState();
 
-      // -- Keyboard shortcut: Space = Generate when hovering the node -------
+      // -- Keyboard shortcut: Ctrl+Enter = Generate when hovering the node --
       let _mouseOverRoot=false;
       root.addEventListener("mouseenter",()=>{ _mouseOverRoot=true; });
       root.addEventListener("mouseleave",()=>{ _mouseOverRoot=false; });
       document.addEventListener("keydown",(e)=>{
-        if(e.code!=="Space") return;
+        if(!e.ctrlKey||e.key!=="Enter") return;
         if(!_mouseOverRoot) return;
-        const tag=(document.activeElement||{}).tagName||"";
-        if(tag==="INPUT"||tag==="TEXTAREA") return;
         if(settingsOverlay.style.display!=="none"||historyOverlay.style.display!=="none"||libraryOverlay.style.display!=="none"||discoverOverlay.style.display!=="none") return;
         e.preventDefault();e.stopPropagation();
         genBtn.click();
