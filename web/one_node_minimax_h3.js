@@ -2274,6 +2274,27 @@ app.registerExtension({
         const canvas=i2vCanvasSize(result.width,result.height,S.i2vAspect,sourceSize.width,sourceSize.height);
         return {...result,...canvas,label:`${canvas.width}x${canvas.height} (${S.i2vAspect})`};
       };
+      const _memoryFitResolution=async(res,frames)=>{
+        if(!res||!frames||S.mode==="image") return res;
+        if(S._h3WorkloadCap===undefined){
+          S._h3WorkloadCap=180000000;
+          try{
+            const r=await fetch("/system_stats");
+            const d=await r.json();
+            const total=Number(d?.devices?.[0]?.vram_total)||0;
+            if(total>20e9) S._h3WorkloadCap=420000000;
+            else if(total>14e9) S._h3WorkloadCap=280000000;
+          }catch(e){}
+        }
+        const work=Number(res.width)*Number(res.height)*Number(frames);
+        if(!Number.isFinite(work)||work<=S._h3WorkloadCap) return res;
+        const scale=Math.sqrt(S._h3WorkloadCap/work);
+        const width=Math.max(32,Math.floor((res.width*scale)/32)*32);
+        const height=Math.max(32,Math.floor((res.height*scale)/32)*32);
+        if(width>=res.width&&height>=res.height) return res;
+        S._memoryFitNote=`${res.width}×${res.height} → ${width}×${height} for available VRAM`;
+        return {...res,width,height,label:`${width}x${height} (VRAM fit)`};
+      };
       const resRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
       const resCapRow=mk("div",{display:"flex",alignItems:"center",gap:"4px"});
       const resCap=mk("div",{fontSize:"10px",color:C.text});tx(resCap,"Resolution");
@@ -3246,7 +3267,7 @@ app.registerExtension({
         add("video",S.extendVideo);
         (S.kf||[]).forEach(k=>add("image",k.img));
         if(Array.isArray(extra)) extra.forEach(f=>files.push(f));
-        const res=_resolveRes();
+        const res=S._generationRes||_resolveRes();
         const fp={
           prompt:_finalPrompt(S.prompt),
           files,
@@ -3372,19 +3393,21 @@ app.registerExtension({
         });
       };
 
-      const _patchCommon=(wf)=>{
+      const _patchCommon=async(wf)=>{
+        S._memoryFitNote="";
         wf["1"].inputs.clip_name=S.models.clip;
         const condNode=wf["6"];
         const isR2V=condNode&&condNode.class_type==="MiniMaxH3ReferenceToVideo";
         wf["2"].inputs.unet_name= isR2V&&(S.mode==="r2v"||S.mode==="audio_drive")? S.models.unetR2V : S.models.unetT2V;
         wf["3"].inputs.vae_name=S.models.vaeVideo;
         wf["4"].inputs.vae_name=S.models.vaeAudio;
-        const res=_resolveRes();
         let frames=snapFrames(S.duration,S.fps);
         if(S.mode==="extend"){
           const EXT_CONTEXT=90;
           frames=snapFrames(S.duration+EXT_CONTEXT/24,S.fps);
         }
+        const res=await _memoryFitResolution(_resolveRes(),frames);
+        S._generationRes=res;
         condNode.inputs.prompt=_finalPrompt(S.prompt);
         condNode.inputs.width=res.width;
         condNode.inputs.height=res.height;
@@ -3498,12 +3521,12 @@ app.registerExtension({
         if(mode==="chain") return _buildChain();
         if(mode==="image") return _buildImage();
         const wf=await _fetchTpl(TEMPLATES[mode]);
-        _patchCommon(wf);
+        await _patchCommon(wf);
         let nextId=200;
         const newId=()=>String(nextId++);
         if(mode==="i2v"){
           if(!S.firstFrame&&!S.lastFrame) throw new Error("I2V needs at least one image. Drop a First frame (animate from it), a Last frame (converge to it), or both (morph between them) - or switch to T2V mode.");
-          const i2vRes=_resolveRes();
+          const i2vRes=S._generationRes||_resolveRes();
           if(S.firstFrame){
             const id=newId();
             wf[id]={class_type:"LoadImage",inputs:{image:S.firstFrame},_meta:{title:"First Frame"}};
@@ -3789,6 +3812,8 @@ app.registerExtension({
           for(let i=0;i<n;i++){
             if(S.randomizeSeed){ S.seed=Math.floor(Math.random()*(H3_SEED_MAX+1)); seedNI._inp.value=String(S.seed); }
             const wf=await _buildWorkflow();
+            delete S._generationRes;
+            if(S._memoryFitNote) setStage(S._memoryFitNote,4);
             const body={prompt:wf,client_id:api.clientId,extra_data:{enable_previews:true}};
             const res=await api.fetchApi("/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
             const data=await res.json();
@@ -3803,6 +3828,7 @@ app.registerExtension({
           _armFinishWatch();
           setStage(n>1?`Queued ${n} runs...`:"In queue...",6);
         }catch(e){
+          delete S._generationRes;
           resetBtn();showError(fmtErr(e));
         }
       };
