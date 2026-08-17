@@ -3605,6 +3605,7 @@ app.registerExtension({
         const plan=_temporalBatchClips();
         if(!plan) return null;
         if(S.mode==="i2v"&&!S.firstFrame) throw new Error("Temporal I2V batching needs a First frame. Add one or turn Temporal batches off.");
+        if(Number(S.rifeMultiplier)!==1) throw new Error("Temporal batching currently requires RIFE 1x. Generate the native assembled video first, then run RIFE on the finished file.");
         S._temporalChainClips=plan.clips;
         S._temporalChainMode=S.mode;
         S._temporalBatchActive=true;
