@@ -3692,7 +3692,9 @@ app.registerExtension({
           const d=await r.json();
           _M={diffusion:d.diffusion_models||[],text_encoders:d.text_encoders||[],vaes:d.vaes||[],loras:d.loras||[]};
           const has=(arr,v)=>arr.some(m=>(m||"").toLowerCase()===(v||"").toLowerCase());
-          if(!has(_M.text_encoders,S.models.clip)) S.models.clip=_pickModel(_M.text_encoders,"qwen3vl_32b_minimax_h3");
+          const h3ClipItems=_M.text_encoders.filter(m=>/qwen3vl_32b_minimax_h3/i.test(m||""));
+          const clipItems=h3ClipItems.length?h3ClipItems:_M.text_encoders;
+          if(!has(clipItems,S.models.clip)) S.models.clip=_pickModel(clipItems,"qwen3vl_32b_minimax_h3");
           if(!has(_M.diffusion,S.models.unetT2V)) S.models.unetT2V=_pickModel(_M.diffusion,"fl2va");
           if(!has(_M.diffusion,S.models.unetR2V)) S.models.unetR2V=_pickModel(_M.diffusion,"ref2va");
           if(!has(_M.vaes,S.models.vaeVideo)) S.models.vaeVideo=_pickModel(_M.vaes,"video_vae");
@@ -3700,7 +3702,7 @@ app.registerExtension({
           persist();
           modelDDs.unetT2V.updateItems(_M.diffusion);
           modelDDs.unetR2V.updateItems(_M.diffusion);
-          modelDDs.clip.updateItems(_M.text_encoders);
+          modelDDs.clip.updateItems(clipItems);
           modelDDs.vaeVideo.updateItems(_M.vaes);
           modelDDs.vaeAudio.updateItems(_M.vaes);
           speedLoraDD.updateItems(["none"].concat(_M.loras));
