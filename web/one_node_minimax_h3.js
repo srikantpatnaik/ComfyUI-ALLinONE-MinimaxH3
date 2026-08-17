@@ -1,7 +1,9 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
+import { createI2VAspectControl, i2vCanvasSize, normalizeI2VAspect } from "./h3_i2v_aspect.js";
 import { h3TextEncoderItems } from "./h3_model_features.js";
 import { createOutputControls, normalizeOutputSettings, outputFrameLabel, patchOutputVideo } from "./h3_output_features.js";
+import { attachOutputContextMenu } from "./h3_output_context.js";
 
 const ACCENT_DEFAULT = "#c0a996";
 const SUPPORT_URL = "https://ko-fi.com/leonq8";
@@ -758,6 +760,7 @@ app.registerExtension({
           loras:          (()=>{ const arr=Array.isArray(saved.loras)?saved.loras:[]; const named=arr.filter(l=>l&&l.name); return named.concat([{name:"",strength:1}]); })(),
           firstFrame:      saved.firstFrame||null,
           lastFrame:       saved.lastFrame||null,
+          i2vAspect:       normalizeI2VAspect(saved.i2vAspect),
           refImages:       Array.isArray(saved.refImages)?saved.refImages:[],
           refVideos:       (Array.isArray(saved.refVideos)?saved.refVideos:[]).map(v=>(typeof v==="string")?{name:v,useAudio:false}:{name:(v&&v.name)||"",useAudio:!!(v&&v.useAudio)}),
           refAudios:       Array.isArray(saved.refAudios)?saved.refAudios:[],
@@ -819,6 +822,7 @@ app.registerExtension({
           steps:S.steps,quality:S.quality,optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
           loras:S.loras,chainClips:S.chainClips.map(c=>({prompt:c.prompt,duration:c.duration})),
           firstFrame:S.firstFrame,lastFrame:S.lastFrame,
+          i2vAspect:S.i2vAspect,
           refImages:S.refImages,refVideos:S.refVideos,refAudios:S.refAudios,
           audioFile:S.audioFile,extendVideo:S.extendVideo,
           kf:(S.kf||[]).map(k=>({img:k.img||null,pos:k.pos||0})),
@@ -1432,6 +1436,7 @@ app.registerExtension({
           tx(name,(item.favorite?"★ ":"")+item.filename);
           card.append(v,name);
           card.onclick=()=>_libOpen(item);
+          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend});
           card.onmouseenter=()=>card.style.borderColor=C.lime;
           card.onmouseleave=()=>card.style.borderColor=C.border;
           libGrid.appendChild(card);
@@ -1753,7 +1758,7 @@ app.registerExtension({
       modeHdr.append(modeTitleBlock,modeChev);
       const modeArea=mk("div",{display:"flex",flexDirection:"column",gap:"8px"});
 
-      const i2vArea=mk("div",{display:"flex",gap:"10px"});
+      const i2vArea=mk("div",{display:"flex",flexDirection:"column",gap:"8px"});
       const kfArea=mk("div",{display:"flex",flexDirection:"column",gap:"6px"});
       const refArea=mk("div",{display:"flex",flexDirection:"column",gap:"8px"});
       const chainArea=mk("div",{display:"flex",flexDirection:"column",gap:"6px"});
@@ -1902,7 +1907,10 @@ app.registerExtension({
       // I2V slots
       const firstSlot=ImgSlot(true,n=>{S.firstFrame=n;persist();});
       const lastSlot=ImgSlot(true,n=>{S.lastFrame=n;persist();});
-      i2vArea.append(_mkSlotCard("First frame",firstSlot.el),_mkSlotCard("Last frame",lastSlot.el));
+      const i2vSlots=mk("div",{display:"flex",gap:"10px"});
+      i2vSlots.append(_mkSlotCard("First frame",firstSlot.el),_mkSlotCard("Last frame",lastSlot.el));
+      const i2vAspectRow=createI2VAspectControl({S,mk,tx,infoIcon,DD,persist,onChange:()=>_updateFramesLabel()});
+      i2vArea.append(i2vSlots,i2vAspectRow);
       if(S.firstFrame) firstSlot._restorePreview(S.firstFrame);
       if(S.lastFrame) lastSlot._restorePreview(S.lastFrame);
 
@@ -2175,12 +2183,17 @@ app.registerExtension({
       const params=mk("div",{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"});
       let _resItems=[];
       const _resolveRes=()=>{
+        let result;
         if(S.resolution==="Custom"){
           const w=Math.max(32,Math.min(16384,Math.round(S.customW/32)*32));
           const h=Math.max(32,Math.min(16384,Math.round(S.customH/32)*32));
-          return {width:w,height:h,label:`${w}x${h} (custom)`};
+          result={width:w,height:h,label:`${w}x${h} (custom)`};
+        } else {
+          result=_resItems.find(r=>r.label===S.resolution)||_resItems[0]||{width:960,height:544,label:S.resolution};
         }
-        return _resItems.find(r=>r.label===S.resolution)||_resItems[0]||{width:960,height:544,label:S.resolution};
+        if(S.mode!=="i2v") return result;
+        const canvas=i2vCanvasSize(result.width,result.height,S.i2vAspect);
+        return {...result,...canvas,label:`${canvas.width}x${canvas.height} (${S.i2vAspect})`};
       };
       const resRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
       const resCapRow=mk("div",{display:"flex",alignItems:"center",gap:"4px"});
@@ -2863,6 +2876,20 @@ app.registerExtension({
         vidEl.muted=false;
         vidEl.play().catch(()=>{ vidEl.muted=true; vidEl.play().catch(()=>{}); });
       };
+      const _stageVideoForExtend=async(item,selectMode=true)=>{
+        if(!item||item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"")) return;
+        try{
+          const stage=await fetch("/h3one/stage_input",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:item.filename,subfolder:item.subfolder||""})});
+          const sd=await stage.json();
+          if(!sd.ok) throw new Error(sd.error||"Could not copy the video to the input folder");
+          S.extendVideo=sd.name;
+          persist();
+          exSlot._restorePreview(sd.name);
+          if(selectMode) _switchMode("extend");
+        }catch(e){
+          showError("Could not send video to Extend: "+fmtErr(e));
+        }
+      };
       const _favCurrent=async()=>{
         if(!_curItem) return;
         const nf=!_curItem.favorite;
@@ -2949,6 +2976,7 @@ app.registerExtension({
           if(item.favorite) name.style.color=C.lime;
           card.append(v,name);
           card.onclick=()=>_showVideo(item);
+          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend});
           card.onmouseenter=()=>card.style.borderColor=C.lime;
           card.onmouseleave=()=>card.style.borderColor=C.border;
           galleryBox.appendChild(card);
@@ -3015,6 +3043,7 @@ app.registerExtension({
         _upscaleRun="";
         _activeShownFiles.push(item.filename);
         const isTemp=item.type==="temp";
+        if(!wasUpscale&&!isTemp&&S.mode==="extend") _stageVideoForExtend(item,false);
         if(!isTemp){
           fetch("/h3one/set_output",{method:"POST",headers:{"Content-Type":"application/json"},
             body:JSON.stringify({node_id:self.id,info:{filename:item.filename,subfolder:item.subfolder||""}})}).catch(()=>{});
@@ -3377,15 +3406,20 @@ app.registerExtension({
         const newId=()=>String(nextId++);
         if(mode==="i2v"){
           if(!S.firstFrame&&!S.lastFrame) throw new Error("I2V needs at least one image. Drop a First frame (animate from it), a Last frame (converge to it), or both (morph between them) - or switch to T2V mode.");
+          const i2vRes=_resolveRes();
           if(S.firstFrame){
             const id=newId();
             wf[id]={class_type:"LoadImage",inputs:{image:S.firstFrame},_meta:{title:"First Frame"}};
-            wf["6"].inputs.first_frame=[id,0];
+            const fitId=newId();
+            wf[fitId]={class_type:"MiniMaxH3I2VAspectFit",inputs:{image:[id,0],width:i2vRes.width,height:i2vRes.height,aspect_ratio:S.i2vAspect},_meta:{title:"Fit First Frame"}};
+            wf["6"].inputs.first_frame=[fitId,0];
           }
           if(S.lastFrame){
             const id2=newId();
             wf[id2]={class_type:"LoadImage",inputs:{image:S.lastFrame},_meta:{title:"Last Frame"}};
-            wf["6"].inputs.last_frame=[id2,0];
+            const fitId2=newId();
+            wf[fitId2]={class_type:"MiniMaxH3I2VAspectFit",inputs:{image:[id2,0],width:i2vRes.width,height:i2vRes.height,aspect_ratio:S.i2vAspect},_meta:{title:"Fit Last Frame"}};
+            wf["6"].inputs.last_frame=[fitId2,0];
           }
         } else if(mode==="r2v"){
           const hasRefs=S.refImages.length||S.refVideos.length||S.refAudios.length;
