@@ -44,11 +44,21 @@ export function attachOutputContextMenu(card, item, { isVideo, onExtend }) {
     }
     menu.appendChild(action);
     document.body.appendChild(menu);
-    const close = () => { menu.remove(); document.removeEventListener("pointerdown", dismiss); };
+    const close = () => {
+      menu.remove();
+      document.removeEventListener("click", dismiss);
+      document.removeEventListener("keydown", dismissKey);
+    };
     const dismiss = event => {
       if (menu.contains(event.target)) return;
       close();
     };
-    setTimeout(() => document.addEventListener("pointerdown", dismiss), 0);
+    const dismissKey = event => {
+      if (event.key === "Escape") close();
+    };
+    setTimeout(() => {
+      document.addEventListener("click", dismiss);
+      document.addEventListener("keydown", dismissKey);
+    }, 0);
   });
 }
