@@ -3059,7 +3059,7 @@ app.registerExtension({
       });
       genBtn.innerHTML=`<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>`;
       const genBtnLbl=mk("span",{}, {textContent:"Generate"});
-      const genKbd=mk("span",{fontSize:"9px",fontWeight:"700",opacity:".65",border:"1px solid rgba(0,0,0,.25)",borderRadius:"4px",padding:"1px 5px"}, {textContent:"Space"});
+      const genKbd=mk("span",{fontSize:"9px",fontWeight:"700",opacity:".65",border:"1px solid rgba(0,0,0,.25)",borderRadius:"4px",padding:"1px 5px"}, {textContent:"Ctrl+Enter"});
       genBtn.append(genBtnLbl,genKbd);
       const stopBtn=mk("button",{background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,fontSize:"12px",cursor:"pointer",maxWidth:"0",minWidth:"0",width:"0",opacity:"0",padding:"0",height:"42px",transition:"max-width .25s ease, opacity .25s ease, padding .25s ease",outline:"none",overflow:"hidden",flexShrink:"0",whiteSpace:"nowrap"});
       tx(stopBtn,"Stop");
