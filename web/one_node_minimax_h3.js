@@ -817,6 +817,7 @@ app.registerExtension({
           prompt:          saved.prompt!==undefined?saved.prompt:"",
           resolution:      saved.resolution!==undefined?saved.resolution:"960x544 (0.5MP Balanced)",
           duration:        saved.duration!==undefined?saved.duration:5,
+          temporalBatching: saved.temporalBatching||"auto90",
           steps:           (saved.steps&&saved.steps!==30)?saved.steps:20,
           quality:         _sq,
           optSol:          (saved.quality==="custom")?(saved.optSol!==undefined?saved.optSol:false):_qf.sol,
@@ -887,11 +888,11 @@ app.registerExtension({
         // quality/resolution/loras survive workflow-tab switches (they used to be
         // captured only when switching mode tabs, so a stale snapshot overwrote
         // the just-changed value on rebuild).
-        S.modeSettings[S.mode]={prompt:S.prompt,steps:S.steps,quality:S.quality,resolution:S.resolution,duration:S.duration,loras:JSON.parse(JSON.stringify(S.loras||[])),optSol:S.optSol,optCache:S.optCache,optSage:S.optSage};
+        S.modeSettings[S.mode]={prompt:S.prompt,steps:S.steps,quality:S.quality,resolution:S.resolution,duration:S.duration,temporalBatching:S.temporalBatching,loras:JSON.parse(JSON.stringify(S.loras||[])),optSol:S.optSol,optCache:S.optCache,optSage:S.optSage};
         if(_updRecipeFn){ try{ _updRecipeFn(); }catch(e){} }
         saveState({
           mode:S.mode,prompt:S.prompt,resolution:S.resolution,duration:S.duration,
-          steps:S.steps,quality:S.quality,optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
+          steps:S.steps,quality:S.quality,temporalBatching:S.temporalBatching,optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
           loras:S.loras,chainClips:S.chainClips.map(c=>({prompt:c.prompt,duration:c.duration})),
           firstFrame:S.firstFrame,lastFrame:S.lastFrame,firstFrameSize:S.firstFrameSize,lastFrameSize:S.lastFrameSize,
           i2vAspect:S.i2vAspect,
@@ -2324,6 +2325,15 @@ app.registerExtension({
       durInner.append(durNI,framesLbl);
       durRow.append(durCap,durInner);
       const {fpsRow,rifeRow}=createOutputControls({S,mk,tx,infoIcon,NI,DD,persist,updateFramesLabel:()=>_updateFramesLabel()});
+      const temporalRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
+      const temporalCapRow=mk("div",{display:"flex",alignItems:"center",gap:"4px"});
+      const temporalCap=mk("div",{fontSize:"10px",color:C.text});tx(temporalCap,"Temporal batches");
+      temporalCapRow.append(temporalCap,infoIcon("Keep the selected native resolution and split only time into sequential H3 chunks. Each later chunk continues from the previous tail and the final assembler writes one video. Auto (90-frame chunks) is the safe choice for 800×1088 on a 12GB GPU; Off sends the whole duration through one diffusion sequence and can run out of VRAM."));
+      const temporalDD=DD(["Off","Auto (90-frame safe chunks)","Auto (124-frame chunks)"],({off:"Off",auto90:"Auto (90-frame safe chunks)",auto124:"Auto (124-frame chunks)"}[S.temporalBatching]||"Auto (90-frame safe chunks)"),v=>{
+        S.temporalBatching=v==="Off"?"off":v.includes("124")?"auto124":"auto90";
+        persist();
+      });
+      temporalRow.append(temporalCapRow,temporalDD.el);
       const stepsRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
       const stepsCap=mk("div",{fontSize:"10px",color:C.text});tx(stepsCap,"Steps");
       const stepsNI=NI("",S.steps,1,60,1,v=>{S.steps=Math.round(v);persist();},"60px");
@@ -2387,7 +2397,7 @@ app.registerExtension({
       schedCapRow.append(schedCap,infoIcon("The noise schedule. MiniMax H3's native workflows use simple - keep it unless you know why you're changing it."));
       const schedDD=DD(SCHEDULERS,S.schedulerName||"simple",v=>{S.schedulerName=v;persist();});
       schedRow.append(schedCapRow,schedDD.el);
-      params.append(resRow,durRow,fpsRow,rifeRow,stepsRow,qualRow,samplerRow,schedRow);
+      params.append(resRow,durRow,fpsRow,rifeRow,temporalRow,stepsRow,qualRow,samplerRow,schedRow);
 
       // Custom sampling controls for Image mode (shown when the profile is Custom)
       const imgAdvRow=mk("div",{display:"none",flexDirection:"column",gap:"7px"});
@@ -2411,7 +2421,7 @@ app.registerExtension({
       _syncImgAdvRef=_syncImgAdv;
       const _saveModeState=()=>{
         S.modeSettings[S.mode]={
-          prompt:S.prompt,steps:S.steps,quality:S.quality,resolution:S.resolution,duration:S.duration,
+          prompt:S.prompt,steps:S.steps,quality:S.quality,resolution:S.resolution,duration:S.duration,temporalBatching:S.temporalBatching,
           loras:JSON.parse(JSON.stringify(S.loras)),
           optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,
         };
@@ -2437,6 +2447,10 @@ app.registerExtension({
         if(typeof _syncLiveToggle==="function") _syncLiveToggle();
         if(ms.resolution!==undefined){ S.resolution=ms.resolution; resDD.set(ms.resolution); _updResCustom(); }
         if(ms.duration!==undefined){ S.duration=ms.duration; durNI._inp.value=String(ms.duration); _updateFramesLabel(); }
+        if(ms.temporalBatching!==undefined){
+          S.temporalBatching=ms.temporalBatching;
+          temporalDD.set({off:"Off",auto90:"Auto (90-frame safe chunks)",auto124:"Auto (124-frame chunks)"}[S.temporalBatching]||"Auto (90-frame safe chunks)");
+        }
         if(Array.isArray(ms.loras)){ const named=ms.loras.filter(l=>l&&l.name); S.loras=named.concat([{name:"",strength:1}]); _renderLoras(); }
         if(Array.isArray(ms.refImages)) S.refImages=ms.refImages.slice();
         if(Array.isArray(ms.refVideos)) S.refVideos=ms.refVideos.map(v=>(typeof v==="string")?{name:v,useAudio:false}:{name:(v&&v.name)||"",useAudio:!!(v&&v.useAudio)});
@@ -3555,8 +3569,58 @@ app.registerExtension({
         return wf;
       };
 
+      const _temporalBatchLimit=()=>S.temporalBatching==="auto124"?124:90;
+      const _temporalBatchClips=()=>{
+        const target=snapFrames(S.duration,S.fps);
+        const limit=_temporalBatchLimit();
+        if(target<=limit) return null;
+        const context=Math.max(1,Math.min(Number(S.mcLength)||22,limit-17));
+        const valid=[5,22,39,56,73,90,107,124].filter(n=>n<=limit);
+        const clips=[];
+        let remaining=target;
+        let index=0;
+        while(remaining>0){
+          let raw;
+          if(index===0){
+            raw=valid[valid.length-1];
+          } else {
+            const choices=valid.filter(n=>n>context&&n-context<=remaining);
+            raw=choices.length?choices[choices.length-1]:valid.find(n=>n>context);
+          }
+          if(!raw) break;
+          const unique=index===0?raw:raw-context;
+          clips.push({prompt:S.prompt,duration:raw/S.fps});
+          remaining-=unique;
+          index++;
+          if(index>999) throw new Error("Temporal batching produced too many chunks.");
+        }
+        return {clips,context,target,limit};
+      };
+      const _shouldTemporalBatch=()=>{
+        if(!["t2v","i2v"].includes(S.mode)||S.temporalBatching==="off") return false;
+        return snapFrames(S.duration,S.fps)>_temporalBatchLimit();
+      };
+
+      const _buildTemporalChain=async()=>{
+        const plan=_temporalBatchClips();
+        if(!plan) return null;
+        if(S.mode==="i2v"&&!S.firstFrame) throw new Error("Temporal I2V batching needs a First frame. Add one or turn Temporal batches off.");
+        S._temporalChainClips=plan.clips;
+        S._temporalChainMode=S.mode;
+        S._temporalBatchActive=true;
+        S.mcLength=plan.context;
+        try{
+          return await _buildChain();
+        }finally{
+          delete S._temporalChainClips;
+          delete S._temporalChainMode;
+          S._temporalBatchActive=false;
+        }
+      };
+
       const _buildWorkflow=async()=>{
         const mode=S.mode;
+        if(_shouldTemporalBatch()) return _buildTemporalChain();
         if(mode==="chain") return _buildChain();
         if(mode==="image") return _buildImage();
         const wf=await _fetchTpl(TEMPLATES[mode]);
@@ -3683,7 +3747,9 @@ app.registerExtension({
       const _buildChain=async()=>{
         const section=await _fetchTpl(TEMPLATES.chain);
         const session=Date.now().toString(36);
-        const clips=S.chainClips;
+        const temporal=Array.isArray(S._temporalChainClips);
+        const temporalMode=S._temporalChainMode||"t2v";
+        const clips=temporal?S._temporalChainClips:S.chainClips;
         const wf={};
         const sharedKeys=["s:1","s:2","s:3","s:4","s:5"];
         await _loadNativeHighResNodes();
@@ -3709,7 +3775,7 @@ app.registerExtension({
           const trim=out["c"+idx+":trim"];
           const save=out["c"+idx+":save"];
           const frames=snapFrames(cl.duration,S.fps);
-          cond.inputs.prompt=_finalPrompt(cl.prompt, idx===0?"t2v":undefined);
+          cond.inputs.prompt=_finalPrompt(cl.prompt, idx===0?(temporalMode==="i2v"?"i2v":"t2v"):(temporal?"chain":undefined));
           cond.inputs.width=res.width;
           cond.inputs.height=res.height;
           cond.inputs.length=frames;
@@ -3723,6 +3789,21 @@ app.registerExtension({
           out["c"+idx+":savevid"].inputs.filename_prefix=`one-node-minimax-h3/chain/${session}/clip_${idx+1}`;
           if(idx===0){
             delete out["c0:mc"];
+            if(temporal&&temporalMode==="i2v"){
+              const firstId="c0:first";
+              const firstFit="c0:first_fit";
+              out[firstId]={class_type:"LoadImage",inputs:{image:S.firstFrame},_meta:{title:"First Frame"}};
+              out[firstFit]={class_type:"MiniMaxH3I2VAspectFit",inputs:{image:[firstId,0],width:res.width,height:res.height,aspect_ratio:S.i2vAspect},_meta:{title:"Fit First Frame"}};
+              const i2vInputs={clip:["s:1",0],vae:["s:3",0],prompt:cond.inputs.prompt,width:res.width,height:res.height,length:frames,first_frame:[firstFit,0]};
+              if(S.lastFrame&&clips.length===1){
+                const lastId="c0:last";
+                const lastFit="c0:last_fit";
+                out[lastId]={class_type:"LoadImage",inputs:{image:S.lastFrame},_meta:{title:"Last Frame"}};
+                out[lastFit]={class_type:"MiniMaxH3I2VAspectFit",inputs:{image:[lastId,0],width:res.width,height:res.height,aspect_ratio:S.i2vAspect},_meta:{title:"Fit Last Frame"}};
+                i2vInputs.last_frame=[lastFit,0];
+              }
+              out["c0:cond"]={class_type:"MiniMaxH3ImageToVideo",inputs:i2vInputs,_meta:{title:"H3 I2V Batch 1"}};
+            }
             guider.inputs.conditioning=["c0:cond",0];
             trim.inputs.trim_frames=0;
           } else {
@@ -3734,6 +3815,13 @@ app.registerExtension({
             mc.inputs.audio_context_length=S.mcLength;
             trim.inputs.trim_frames=["c"+idx+":mc",1];
             mc.inputs.crop="disabled";
+          }
+          if(temporal&&temporalMode==="i2v"&&S.lastFrame&&idx===clips.length-1&&idx>0){
+            const lastId="c"+idx+":last";
+            const lastFit="c"+idx+":last_fit";
+            out[lastId]={class_type:"LoadImage",inputs:{image:S.lastFrame},_meta:{title:"Last Frame"}};
+            out[lastFit]={class_type:"MiniMaxH3I2VAspectFit",inputs:{image:[lastId,0],width:res.width,height:res.height,aspect_ratio:S.i2vAspect},_meta:{title:"Fit Last Frame"}};
+            out["c"+idx+":cond"]={class_type:"MiniMaxH3ImageToVideo",inputs:{clip:["s:1",0],vae:["s:3",0],prompt:cond.inputs.prompt,width:res.width,height:res.height,length:frames,last_frame:[lastFit,0]},_meta:{title:"H3 I2V Final Batch"}};
           }
           Object.assign(wf,out);
         });
@@ -3810,6 +3898,25 @@ app.registerExtension({
         }
         patchOutputVideo(wf,S.fps,S.rifeMultiplier);
         _applyAutoSave(wf);
+        if(temporal){
+          let audioSrc=["c0:trim",1];
+          for(let idx=1;idx<clips.length;idx++){
+            const id="cchain:audio"+idx;
+            wf[id]={class_type:"AudioConcat",inputs:{audio1:audioSrc,audio2:["c"+idx+":trim",1],direction:"after"},_meta:{title:"Join Batch Audio"}};
+            audioSrc=[id,0];
+          }
+          const assembleId="cchain:assemble";
+          wf[assembleId]={class_type:"MiniMaxH3AssembleCheckpoints",inputs:{
+            vae:["s:3",0],master_audio:audioSrc,
+            checkpoint_path:"one-node-minimax-h3/chain/"+session,
+            clip_count:clips.length,context_frames:S.mcLength,overlap_frames:0,
+            fps:S.fps,assembly_mode:"after_generation",
+            filename_prefix:"one-node-minimax-h3/temporal-batches/"+session,
+            pix_fmt:"yuv420p",crf:19,trim_to_audio:true,
+            completion_checkpoint:["c"+(clips.length-1)+":save",0],
+          },_meta:{title:"Assemble Native Temporal Batches"}};
+          clips.forEach((_cl,idx)=>{ delete wf["c"+idx+":savevid"]; });
+        }
         return wf;
       };
 
@@ -3843,7 +3950,7 @@ app.registerExtension({
         errorBox.style.display="none";
         _showLiveChip(false);
         self._h3_lpOn=!!S.livePreview&&S.mode!=="image";
-        self._h3_lpId=S.mode==="chain"?"s:lp":"lp";
+        self._h3_lpId=(S.mode==="chain"||_shouldTemporalBatch())?"s:lp":"lp";
         if(self._h3_lpOn&&_taeChecked&&!_taeFound){
           resetBtn();
           showError(`Live Preview is on but the decoder "${S.models.tae}" was not found in a ComfyUI models/vae_approx folder.\nOpen Settings to pick the Live Preview decoder, download taeh3.safetensors from huggingface.co/Kijai/MiniMax-H3-TAE, or turn Live Preview off.`);
