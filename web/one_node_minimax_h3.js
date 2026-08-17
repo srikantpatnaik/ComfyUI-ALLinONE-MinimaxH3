@@ -40,6 +40,7 @@ function setVideoMuted(m){
 const NODE_W = 1200;
 const NODE_H = 700;
 const LS_KEY = "one_node_minimax_h3_state";
+let _autoFullscreenPending = true;
 
 const MODES = [
   { key:"t2v",         label:"T2V" },
@@ -3986,6 +3987,11 @@ app.registerExtension({
           let el=root;
           for(let i=0;i<6;i++){el=el?.parentElement;if(!el)break;el.querySelectorAll("[class*='bg-node-component-surface']").forEach(b=>b.style.display="none");}
         });
+      }
+
+      if(_autoFullscreenPending){
+        _autoFullscreenPending=false;
+        requestAnimationFrame(()=>_enterFullscreen());
       }
 
       root.addEventListener("pointerdown",()=>{
