@@ -13,6 +13,7 @@ This fork stays close to the upstream ALL-in-ONE MiniMax H3 node and keeps its c
 - **Aspect-safe I2V inputs** — the I2V panel offers `Original`, `16:9`, and `9:16`. Source images are scaled down once and centered on the target canvas without stretching; forced ratios also change the H3 video canvas to the selected ratio.
 - **Extend from outputs** — right-click any video in the output strip or Library and choose **Send to Extend**. Completed Extend renders are automatically staged as the next Extend source, so they can be extended again without another manual upload.
 - **Preserved Extend source** — Extend conditions on the source tail as before, but the finished video is assembled from the original staged source file plus the generated tail. The previous source is kept out of the VAE and the final save is file-backed, avoiding a second low-quality tensor round trip.
+- **Readable reference previews** — first/last frames, reference images, keyframes, extend videos, and reference videos expand to a larger thumbnail that follows the loaded media’s aspect ratio instead of cropping it into a tiny square.
 
 The additions are isolated in `web/h3_model_features.js`, `web/h3_output_features.js`, `web/h3_i2v_aspect.js`, `web/h3_output_context.js`, `h3_i2v_aspect.py`, and `h3_preserve_extension.py`; the main node file only contains the small integration points. Everything else below describes the upstream project.
 

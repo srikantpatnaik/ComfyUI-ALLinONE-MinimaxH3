@@ -356,6 +356,16 @@ function mkRmBtn(){
 }
 
 function ImgSlot(optional,onFile,onSize){
+  const PREVIEW_LONG=192;
+  const resetSize=()=>{wrap.style.width="72px";wrap.style.height="72px";};
+  const fitSize=(width,height)=>{
+    if(!width||!height) return;
+    const ratio=Number(width)/Number(height);
+    if(!Number.isFinite(ratio)||ratio<=0) return;
+    const w=ratio>=1?PREVIEW_LONG:Math.max(72,Math.round(PREVIEW_LONG*ratio));
+    const h=ratio>=1?Math.max(72,Math.round(PREVIEW_LONG/ratio)):PREVIEW_LONG;
+    wrap.style.width=`${w}px`;wrap.style.height=`${h}px`;
+  };
   const wrap=mk("div",{
     width:"72px",height:"72px",borderRadius:"12px",
     border:`1.5px dashed ${C.border}`,background:C.bg2,
@@ -385,7 +395,7 @@ function ImgSlot(optional,onFile,onSize){
   } else { icoWrap.append(ico,lbl); }
   const prevEl=mk("img",{
     position:"absolute",inset:"0",width:"100%",height:"100%",
-    objectFit:"cover",display:"none",borderRadius:"11px",
+    objectFit:"contain",display:"none",borderRadius:"11px",background:"#111",
   });
   const rm=mkRmBtn();
   const inp=mk("input",{display:"none"},{type:"file",accept:"image/*"});
@@ -421,6 +431,7 @@ function ImgSlot(optional,onFile,onSize){
   let _currentName=null;
   const _showLoaded=(src,fname)=>{
     prevEl.onload=()=>{
+      fitSize(prevEl.naturalWidth,prevEl.naturalHeight);
       if(prevEl.naturalWidth&&prevEl.naturalHeight&&onSize) onSize(prevEl.naturalWidth,prevEl.naturalHeight);
     };
     prevEl.src=src;prevEl.style.display="block";
@@ -443,6 +454,7 @@ function ImgSlot(optional,onFile,onSize){
     e.stopPropagation();
     prevEl.src="";prevEl.style.display="none";
     rm.style.display="none";icoWrap.style.display="flex";sourceBtns.style.display="flex";
+    resetSize();
     wrap.style.borderColor=C.border;inp.value="";_currentName=null;onFile(null);
     if(onSize) onSize(null,null);
   };
@@ -456,6 +468,16 @@ function ImgSlot(optional,onFile,onSize){
 }
 
 function MediaSlot(type,onFile){
+  const PREVIEW_LONG=192;
+  const resetSize=()=>{wrap.style.width="72px";wrap.style.height="72px";};
+  const fitSize=(width,height)=>{
+    if(!width||!height) return;
+    const ratio=Number(width)/Number(height);
+    if(!Number.isFinite(ratio)||ratio<=0) return;
+    const w=ratio>=1?PREVIEW_LONG:Math.max(72,Math.round(PREVIEW_LONG*ratio));
+    const h=ratio>=1?Math.max(72,Math.round(PREVIEW_LONG/ratio)):PREVIEW_LONG;
+    wrap.style.width=`${w}px`;wrap.style.height=`${h}px`;
+  };
   const acceptMap={video:"video/*",audio:"audio/*"};
   const icons={
     video:`<rect x="2" y="2" width="20" height="20" rx="2.5"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/>`,
@@ -482,9 +504,10 @@ function MediaSlot(type,onFile){
   icoWrap.append(ico,lbl);
   const videoThumb = type==="video" ? mk("video",{
     position:"absolute",inset:"0",width:"100%",height:"100%",
-    objectFit:"cover",display:"none",borderRadius:"11px",pointerEvents:"none",
+    objectFit:"contain",display:"none",borderRadius:"11px",pointerEvents:"none",background:"#111",
   }) : null;
   if(videoThumb){ videoThumb.muted=_videoMuted; videoThumb.preload="metadata"; }
+  if(videoThumb) videoThumb.onloadedmetadata=()=>fitSize(videoThumb.videoWidth,videoThumb.videoHeight);
   const audioGlow = type==="audio" ? mk("div",{
     position:"absolute",inset:"0",display:"none",
     flexDirection:"column",alignItems:"center",justifyContent:"center",pointerEvents:"none",
@@ -620,6 +643,7 @@ function MediaSlot(type,onFile){
     icoWrap.style.display="flex";loadedName.style.display="none";rm.style.display="none";
     if(sourceBtns) sourceBtns.style.display="flex";
     wrap.style.borderColor=C.border;wrap.style.background=C.bg2;
+    resetSize();
     wrap._hasFile=false;wrap._filename=null;
     if(videoThumb){videoThumb.style.display="none";videoThumb.src="";}
     if(audioGlow) audioGlow.style.display="none";
