@@ -45,10 +45,10 @@ export function patchOutputVideo(workflow, fps, rifeMultiplier) {
   const multiplier = [1, 2, 4].includes(Number(rifeMultiplier)) ? Number(rifeMultiplier) : 1;
   Object.keys(workflow).forEach(id => {
     const node = workflow[id];
-    if (!node || node.class_type !== "CreateVideo") return;
+    if (!node || (node.class_type !== "CreateVideo" && node.class_type !== "MiniMaxH3PreserveExtension")) return;
     node.inputs.fps = baseFps;
     if (multiplier === 1) return;
-    const frames = node.inputs.images;
+    const frames = node.inputs.images || node.inputs.continuation_images;
     if (!Array.isArray(frames) || frames.length < 2) return;
     const rifeId = `rife:${id}`;
     workflow[rifeId] = { class_type: "RIFE VFI", inputs: {
@@ -56,7 +56,8 @@ export function patchOutputVideo(workflow, fps, rifeMultiplier) {
       clear_cache_after_n_frames: 10, multiplier, fast_mode: true, ensemble: true,
       scale_factor: 1.0, dtype: "float16", torch_compile: false, batch_size: 1,
     }, _meta: { title: `RIFE ${multiplier}x` } };
-    node.inputs.images = [rifeId, 0];
+    if (node.class_type === "CreateVideo") node.inputs.images = [rifeId, 0];
+    else node.inputs.continuation_images = [rifeId, 0];
     node.inputs.fps = baseFps * multiplier;
   });
 }

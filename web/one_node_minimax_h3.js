@@ -3589,6 +3589,7 @@ app.registerExtension({
         } else if(mode==="extend"){
           if(!S.extendVideo) throw new Error("Extend needs a source video. Drop a file in the Video to extend slot, or switch to another mode.");
           wf["16"].inputs.file=S.extendVideo;
+          wf["14"].inputs.source_file=S.extendVideo;
         }
         return wf;
       };
