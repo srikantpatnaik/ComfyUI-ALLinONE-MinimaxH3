@@ -2218,7 +2218,7 @@ app.registerExtension({
       const durRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
       const durCap=mk("div",{fontSize:"10px",color:C.text});tx(durCap,"Duration (s)");
       const durInner=mk("div",{display:"flex",alignItems:"center",gap:"8px"});
-      const durNI=NI("",S.duration,1,30,0.5,v=>{S.duration=v;persist();_updateFramesLabel();},"60px");
+      const durNI=NI("",S.duration,1,30,0.5,v=>{S.duration=v;persist();_updateFramesLabel();},"78px");
       const framesLbl=mk("div",{fontSize:"9px",color:C.muted,flexShrink:"0"});
       durInner.append(durNI,framesLbl);
       durRow.append(durCap,durInner);
