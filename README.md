@@ -15,8 +15,8 @@ This fork stays close to the upstream ALL-in-ONE MiniMax H3 node and keeps its c
 - **Preserved Extend source** — Extend conditions on the source tail as before, but the finished video is assembled from the original staged source file plus the generated tail. The previous source is kept out of the VAE and the final save is file-backed, avoiding a second low-quality tensor round trip.
 - **Readable reference previews** — first/last frames, reference images, keyframes, extend videos, and reference videos expand to a larger thumbnail that follows the loaded media’s aspect ratio instead of cropping it into a tiny square.
 - **VRAM-aware long renders** — on lower-memory GPUs, oversized duration × resolution requests are reduced to an aspect-safe H3 canvas before sampling, preserving the requested duration instead of failing mid-run with CUDA out-of-memory.
-- **Native high-resolution presets** — the Resolution menu includes a native 1MP preset and a native 2MP experimental preset. When `ComfyUI-KJNodes` is installed, large H3 workloads automatically add its exact low-VRAM attention and feed-forward chunk patches; the VRAM guard still scales down an overly long 1MP/2MP request instead of crashing.
-- **Native 800×1088 temporal batching** — the exact portrait canvas is available as a native preset. For long T2V/I2V renders, `Temporal batches` keeps that pixel grid, generates safe H3-native chunks with Motion Context continuation, and assembles one final video instead of sending the entire timeline through one attention pass. This is temporal batching, not upscaling or pixel downscaling.
+- **Native high-resolution presets** — the Resolution menu includes native 1MP, 1.3MP, 2.1MP, and 2.4MP experimental canvases. When `ComfyUI-KJNodes` is installed, large H3 workloads automatically add its exact low-VRAM attention and feed-forward chunk patches.
+- **Native resolution-aware temporal batching** — `Temporal batches → Auto (RAM offload, resolution-aware)` keeps the selected canvas unchanged, chooses shorter H3-native chunks as pixel area grows, uses Motion Context continuation, and assembles one final video. This includes the exact 800×1088 portrait canvas and larger-than-1MP canvases; it is temporal batching, not upscaling or pixel downscaling. Non-batched modes retain their normal VRAM guard.
 
 The additions are isolated in `web/h3_model_features.js`, `web/h3_output_features.js`, `web/h3_i2v_aspect.js`, `web/h3_output_context.js`, `h3_i2v_aspect.py`, and `h3_preserve_extension.py`; the main node file only contains the small integration points. Everything else below describes the upstream project.
 
@@ -83,7 +83,7 @@ Official MiniMax H3 files from [Comfy-Org/MiniMax-H3](https://huggingface.co/Com
 | Chain | [ComfyUI-H3-Motion-Context-MultiRef](https://github.com/seitanism/ComfyUI-H3-Motion-Context-MultiRef) |
 | Upscale — RTX VSR | [Nvidia_RTX_Nodes_ComfyUI](https://github.com/Comfy-Org/Nvidia_RTX_Nodes_ComfyUI) (NVIDIA RTX GPUs only) |
 | Upscale — SeedVR2 | [ComfyUI-SeedVR2_VideoUpscaler](https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler) |
-| Native 1MP / 2MP / 800×1088 video | [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) for the optional low-VRAM H3 attention and feed-forward patches; [ComfyUI-H3-Motion-Context-MultiRef](https://github.com/seitanism/ComfyUI-H3-Motion-Context-MultiRef) for temporal continuation and assembly |
+| Native 1MP+ / 800×1088 video | [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) for the optional low-VRAM H3 attention and feed-forward patches; [ComfyUI-H3-Motion-Context-MultiRef](https://github.com/seitanism/ComfyUI-H3-Motion-Context-MultiRef) for temporal continuation and assembly |
 | Image | [ComfyUI-MiniMax-H3-Studio](https://github.com/thaakeno/ComfyUI-MiniMax-H3-Studio) |
 
 **Per quality preset** (Settings → Quality)

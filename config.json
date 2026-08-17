@@ -7,7 +7,9 @@
     { "label": "1152x640 (0.7MP Quality)", "width": 1152, "height": 640 },
     { "label": "800x1088 (0.9MP Native Portrait)", "width": 800, "height": 1088 },
     { "label": "1344x768 (1.0MP Native)", "width": 1344, "height": 768 },
-    { "label": "1920x1088 (2.1MP Native Experimental)", "width": 1920, "height": 1088 }
+    { "label": "1536x864 (1.3MP Native RAM)", "width": 1536, "height": 864 },
+    { "label": "1920x1088 (2.1MP Native Experimental)", "width": 1920, "height": 1088 },
+    { "label": "2048x1152 (2.4MP Native RAM Experimental)", "width": 2048, "height": 1152 }
   ],
   "quality_presets": {
     "turbo": { "label": "Turbo (Speed LoRA)", "steps": 6, "sol_attn": false, "cache": false, "sage": false },

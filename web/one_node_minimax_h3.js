@@ -817,7 +817,7 @@ app.registerExtension({
           prompt:          saved.prompt!==undefined?saved.prompt:"",
           resolution:      saved.resolution!==undefined?saved.resolution:"960x544 (0.5MP Balanced)",
           duration:        saved.duration!==undefined?saved.duration:5,
-          temporalBatching: saved.temporalBatching||"auto90",
+          temporalBatching: saved.temporalBatching==="auto90"?"auto":(saved.temporalBatching||"auto"),
           steps:           (saved.steps&&saved.steps!==30)?saved.steps:20,
           quality:         _sq,
           optSol:          (saved.quality==="custom")?(saved.optSol!==undefined?saved.optSol:false):_qf.sol,
@@ -2277,6 +2277,10 @@ app.registerExtension({
       };
       const _memoryFitResolution=async(res,frames)=>{
         if(!res||!frames||S.mode==="image") return res;
+        if(S._temporalBatchActive){
+          S._memoryFitNote=`Native ${res.width}×${res.height}; temporal chunks use RAM offload`;
+          return res;
+        }
         if(S._h3WorkloadCap===undefined){
           const nativeHighRes=S._nativeHighResNodes?.attention&&S._nativeHighResNodes?.ffn;
           S._h3WorkloadCap=nativeHighRes?320000000:180000000;
@@ -2328,9 +2332,9 @@ app.registerExtension({
       const temporalRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
       const temporalCapRow=mk("div",{display:"flex",alignItems:"center",gap:"4px"});
       const temporalCap=mk("div",{fontSize:"10px",color:C.text});tx(temporalCap,"Temporal batches");
-      temporalCapRow.append(temporalCap,infoIcon("Keep the selected native resolution and split only time into sequential H3 chunks. Each later chunk continues from the previous tail and the final assembler writes one video. Auto (90-frame chunks) is the safe choice for 800×1088 on a 12GB GPU; Off sends the whole duration through one diffusion sequence and can run out of VRAM."));
-      const temporalDD=DD(["Off","Auto (90-frame safe chunks)","Auto (124-frame chunks)"],({off:"Off",auto90:"Auto (90-frame safe chunks)",auto124:"Auto (124-frame chunks)"}[S.temporalBatching]||"Auto (90-frame safe chunks)"),v=>{
-        S.temporalBatching=v==="Off"?"off":v.includes("124")?"auto124":"auto90";
+      temporalCapRow.append(temporalCap,infoIcon("Keep the selected native resolution and split only time into sequential H3 chunks. Auto uses shorter H3-native chunks as the pixel area grows: up to 90 frames below 1MP, 73 below 1.5MP, 56 below 2.2MP, and 39 above that. The final assembler writes one video. This uses ComfyUI's VRAM/RAM offload path; it does not upscale or shrink the requested canvas."));
+      const temporalDD=DD(["Off","Auto (RAM offload, resolution-aware)","Manual 90-frame chunks","Manual 124-frame chunks"],({off:"Off",auto:"Auto (RAM offload, resolution-aware)",auto90:"Manual 90-frame chunks",auto124:"Manual 124-frame chunks"}[S.temporalBatching]||"Auto (RAM offload, resolution-aware)"),v=>{
+        S.temporalBatching=v==="Off"?"off":v.includes("resolution")?"auto":v.includes("124")?"auto124":"auto90";
         persist();
       });
       temporalRow.append(temporalCapRow,temporalDD.el);
@@ -2448,8 +2452,8 @@ app.registerExtension({
         if(ms.resolution!==undefined){ S.resolution=ms.resolution; resDD.set(ms.resolution); _updResCustom(); }
         if(ms.duration!==undefined){ S.duration=ms.duration; durNI._inp.value=String(ms.duration); _updateFramesLabel(); }
         if(ms.temporalBatching!==undefined){
-          S.temporalBatching=ms.temporalBatching;
-          temporalDD.set({off:"Off",auto90:"Auto (90-frame safe chunks)",auto124:"Auto (124-frame chunks)"}[S.temporalBatching]||"Auto (90-frame safe chunks)");
+          S.temporalBatching=ms.temporalBatching==="auto90"?"auto":ms.temporalBatching;
+          temporalDD.set({off:"Off",auto:"Auto (RAM offload, resolution-aware)",auto90:"Manual 90-frame chunks",auto124:"Manual 124-frame chunks"}[S.temporalBatching]||"Auto (RAM offload, resolution-aware)");
         }
         if(Array.isArray(ms.loras)){ const named=ms.loras.filter(l=>l&&l.name); S.loras=named.concat([{name:"",strength:1}]); _renderLoras(); }
         if(Array.isArray(ms.refImages)) S.refImages=ms.refImages.slice();
@@ -3569,10 +3573,18 @@ app.registerExtension({
         return wf;
       };
 
-      const _temporalBatchLimit=()=>S.temporalBatching==="auto124"?124:90;
+      const _temporalBatchLimit=(res)=>{
+        if(S.temporalBatching==="auto124") return 124;
+        if(S.temporalBatching==="auto90") return 90;
+        const megapixels=(Number(res?.width||0)*Number(res?.height||0))/1000000;
+        if(megapixels<=1.0) return 90;
+        if(megapixels<=1.5) return 73;
+        if(megapixels<=2.2) return 56;
+        return 39;
+      };
       const _temporalBatchClips=()=>{
         const target=snapFrames(S.duration,S.fps);
-        const limit=_temporalBatchLimit();
+        const limit=_temporalBatchLimit(_resolveRes());
         if(target<=limit) return null;
         const context=Math.max(1,Math.min(Number(S.mcLength)||22,limit-17));
         const valid=[5,22,39,56,73,90,107,124].filter(n=>n<=limit);
@@ -3598,7 +3610,7 @@ app.registerExtension({
       };
       const _shouldTemporalBatch=()=>{
         if(!["t2v","i2v"].includes(S.mode)||S.temporalBatching==="off") return false;
-        return snapFrames(S.duration,S.fps)>_temporalBatchLimit();
+        return snapFrames(S.duration,S.fps)>_temporalBatchLimit(_resolveRes());
       };
 
       const _buildTemporalChain=async()=>{
