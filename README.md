@@ -15,7 +15,7 @@ This fork stays close to the upstream ALL-in-ONE MiniMax H3 node and keeps its c
 - **Preserved Extend source** — Extend conditions on the source tail as before, but the finished video is assembled from the original staged source file plus the generated tail. The previous source is kept out of the VAE and the final save is file-backed, avoiding a second low-quality tensor round trip.
 - **Readable reference previews** — first/last frames, reference images, keyframes, extend videos, and reference videos expand to a larger thumbnail that follows the loaded media’s aspect ratio instead of cropping it into a tiny square.
 - **VRAM-aware long renders** — on lower-memory GPUs, oversized duration × resolution requests are reduced to an aspect-safe H3 canvas before sampling, preserving the requested duration instead of failing mid-run with CUDA out-of-memory.
-- **Safe 2K output** — `Output size → 2K output (safe upscale)` keeps the H3 diffusion pass within the available VRAM, then automatically upscales the completed clip to a maximum 2048px long edge with the selected RTX VSR or SeedVR2 backend. This is deliberately a post-upscale path; native 2K H3 sampling is not reliable on 12GB GPUs.
+- **Native high-resolution presets** — the Resolution menu includes a native 1MP preset and a native 2MP experimental preset. When `ComfyUI-KJNodes` is installed, large H3 workloads automatically add its exact low-VRAM attention and feed-forward chunk patches; the VRAM guard still scales down an overly long 1MP/2MP request instead of crashing.
 
 The additions are isolated in `web/h3_model_features.js`, `web/h3_output_features.js`, `web/h3_i2v_aspect.js`, `web/h3_output_context.js`, `h3_i2v_aspect.py`, and `h3_preserve_extension.py`; the main node file only contains the small integration points. Everything else below describes the upstream project.
 
@@ -82,6 +82,7 @@ Official MiniMax H3 files from [Comfy-Org/MiniMax-H3](https://huggingface.co/Com
 | Chain | [ComfyUI-H3-Motion-Context-MultiRef](https://github.com/seitanism/ComfyUI-H3-Motion-Context-MultiRef) |
 | Upscale — RTX VSR | [Nvidia_RTX_Nodes_ComfyUI](https://github.com/Comfy-Org/Nvidia_RTX_Nodes_ComfyUI) (NVIDIA RTX GPUs only) |
 | Upscale — SeedVR2 | [ComfyUI-SeedVR2_VideoUpscaler](https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler) |
+| Native 1MP / 2MP video | [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) for the optional low-VRAM H3 attention and feed-forward patches |
 | Image | [ComfyUI-MiniMax-H3-Studio](https://github.com/thaakeno/ComfyUI-MiniMax-H3-Studio) |
 
 **Per quality preset** (Settings → Quality)

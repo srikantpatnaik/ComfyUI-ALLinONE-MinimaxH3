@@ -5,7 +5,8 @@
     { "label": "864x480 (0.4MP Speed)", "width": 864, "height": 480 },
     { "label": "960x544 (0.5MP Balanced)", "width": 960, "height": 544 },
     { "label": "1152x640 (0.7MP Quality)", "width": 1152, "height": 640 },
-    { "label": "1344x768 (0.98MP Native Max)", "width": 1344, "height": 768 }
+    { "label": "1344x768 (1.0MP Native)", "width": 1344, "height": 768 },
+    { "label": "1920x1088 (2.1MP Native Experimental)", "width": 1920, "height": 1088 }
   ],
   "quality_presets": {
     "turbo": { "label": "Turbo (Speed LoRA)", "steps": 6, "sol_attn": false, "cache": false, "sage": false },
