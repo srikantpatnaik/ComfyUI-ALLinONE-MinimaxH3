@@ -39,6 +39,7 @@ function setVideoMuted(m){
 
 const NODE_W = 1200;
 const NODE_H = 700;
+const H3_SEED_MAX = 1125899906842623;
 const LS_KEY = "one_node_minimax_h3_state";
 let _autoFullscreenPending = true;
 
@@ -799,7 +800,7 @@ app.registerExtension({
           optSage:         (saved.quality==="custom")?(saved.optSage!==undefined?saved.optSage:false):_qf.sage,
           samplerName:     saved.samplerName||"res_multistep",
           schedulerName:   saved.schedulerName||"simple",
-          seed:            (typeof saved.seed==="number")?saved.seed:0,
+          seed:            (typeof saved.seed==="number")?Math.max(0,Math.min(H3_SEED_MAX,Math.round(saved.seed))):0,
           randomizeSeed:   saved.randomizeSeed!==undefined?saved.randomizeSeed:true,
           batch:           saved.batch||1,
           loras:          (()=>{ const arr=Array.isArray(saved.loras)?saved.loras:[]; const named=arr.filter(l=>l&&l.name); return named.concat([{name:"",strength:1}]); })(),
@@ -2481,11 +2482,11 @@ app.registerExtension({
       const seedBody=mk("div",{display:"flex",flexDirection:"column",gap:"5px"});
       const seedRow=mk("div",{}, {className:"h3-seedrow"});
       const seedLbl=mk("span",{}, {className:"h3-slbl",textContent:"Seed"});
-      const seedNI=NI("",S.seed,0,9007199254740991,1,v=>{S.seed=Math.round(v);persist();},"110px");
+      const seedNI=NI("",S.seed,0,H3_SEED_MAX,1,v=>{S.seed=Math.round(v);persist();},"110px");
       seedNI.style.height="34px";seedNI.style.borderRadius="9px";seedNI.style.background="var(--h3-panel)";
       seedNI.style.border="1px solid var(--h3-line)";seedNI.style.width="auto";seedNI.style.flex="1 1 0";
       seedNI.style.minWidth="0";seedNI.style.maxWidth="150px";
-      const _rollSeed=()=>{ S.seed=Math.floor(Math.random()*9007199254740991); seedNI._inp.value=String(S.seed); persist(); };
+      const _rollSeed=()=>{ S.seed=Math.floor(Math.random()*(H3_SEED_MAX+1)); seedNI._inp.value=String(S.seed); persist(); };
       const randLbl=mk("span",{}, {className:"h3-slbl",textContent:"Random"});
       const randTgl=mk("button",{}, {type:"button",role:"switch",className:"h3-tgl","aria-label":"Randomize seed",title:"Randomize seed"});
       randTgl.appendChild(mk("span",{}, {className:"thumb"}));
@@ -3761,7 +3762,7 @@ app.registerExtension({
           const n=Math.max(1,Math.min(4,S.batch||1));
           const ids=[];
           for(let i=0;i<n;i++){
-            if(S.randomizeSeed){ S.seed=Math.floor(Math.random()*9007199254740991); seedNI._inp.value=String(S.seed); }
+            if(S.randomizeSeed){ S.seed=Math.floor(Math.random()*(H3_SEED_MAX+1)); seedNI._inp.value=String(S.seed); }
             const wf=await _buildWorkflow();
             const body={prompt:wf,client_id:api.clientId,extra_data:{enable_previews:true}};
             const res=await api.fetchApi("/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
