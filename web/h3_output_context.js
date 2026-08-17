@@ -1,6 +1,8 @@
 export function attachOutputContextMenu(card, item, { isVideo, onExtend }) {
   card.addEventListener("contextmenu", event => {
     event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
     document.querySelectorAll(".h3-output-context-menu").forEach(menu => menu.remove());
 
     const menu = document.createElement("div");
