@@ -3,6 +3,16 @@
 ![Status: Beta](https://img.shields.io/badge/status-beta-orange)
 ![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)
 
+## What this fork adds
+
+This fork stays close to the upstream ALL-in-ONE MiniMax H3 node and keeps its changes deliberately small so they can be reviewed or proposed upstream:
+
+- **H3-safe text encoder selection** — the model picker prefers the Qwen encoder files intended for MiniMax H3. This prevents accidentally pairing H3 with an incompatible encoder and getting a matrix-shape error.
+- **Output FPS control** — choose the playback frame rate independently in the node settings. The requested duration is used when calculating the H3 frame count, so changing FPS does not unexpectedly lengthen the video.
+- **Optional RIFE interpolation** — select 1×, 2×, or 4× interpolation. The final playback FPS is adjusted together with the interpolated frame count, preserving the requested duration. This requires the `ComfyUI-Frame-Interpolation` pack and `rife49.pth`.
+
+The additions are isolated in `web/h3_model_features.js` and `web/h3_output_features.js`; the main node file only contains the small integration points. Everything else below describes the upstream project.
+
 One node. The whole MiniMax H3 video pipeline.
 
 No node graph to build, no wires to connect, no hunting through twelve custom node packs to figure out which workflow is the right one. Pick a mode, drop in your prompt or references, hit **Generate** — the node does the rest.
