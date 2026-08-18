@@ -5,13 +5,6 @@ export function normalizeOutputSettings(saved) {
   };
 }
 
-export function outputFrameLabel(duration, fps, rifeMultiplier, snapFrames) {
-  const baseFps = Math.max(1, Math.round(Number(fps) || 24));
-  const multiplier = [1, 2, 4].includes(Number(rifeMultiplier)) ? Number(rifeMultiplier) : 1;
-  const finalFps = baseFps * multiplier;
-  return `= ${snapFrames(duration)} native frames @ ${finalFps}fps${multiplier > 1 ? ` (${multiplier}x RIFE)` : ""}`;
-}
-
 export function createOutputControls({ S, mk, tx, infoIcon, NI, DD, persist, updateFramesLabel }) {
   const fpsRow = mk("div", { display: "flex", flexDirection: "column", gap: "3px" });
   const fpsCapRow = mk("div", { display: "flex", alignItems: "center", gap: "4px" });

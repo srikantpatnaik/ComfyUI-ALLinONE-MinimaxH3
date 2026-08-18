@@ -3,7 +3,7 @@ import { api } from "../../scripts/api.js";
 import { createI2VAspectControl, i2vCanvasSize, normalizeI2VAspect } from "./h3_i2v_aspect.js";
 import { openComfyGalleryPicker } from "./h3_media_picker.js";
 import { h3TextEncoderItems } from "./h3_model_features.js";
-import { buildRifePostprocessWorkflow, createOutputControls, normalizeOutputSettings, outputFrameLabel, patchOutputVideo } from "./h3_output_features.js";
+import { buildRifePostprocessWorkflow, createOutputControls, normalizeOutputSettings, patchOutputVideo } from "./h3_output_features.js";
 import { attachOutputContextMenu } from "./h3_output_context.js";
 import { createH3RestoreMetadata, embedH3VideoMetadata, fetchH3RestoreMetadata } from "./h3_video_metadata.js";
 
@@ -2441,9 +2441,8 @@ app.registerExtension({
       const durRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
       const durCap=mk("div",{fontSize:"10px",color:C.text});tx(durCap,"Duration (s)");
       const durInner=mk("div",{display:"flex",alignItems:"center",gap:"8px"});
-      const durNI=NI("",S.duration,1,30,0.5,v=>{S.duration=v;persist();_updateFramesLabel();},"96px");
-      const framesLbl=mk("div",{fontSize:"9px",color:C.muted,flexShrink:"0"});
-      durInner.append(durNI,framesLbl);
+      const durNI=NI("",S.duration,1,30,0.5,v=>{S.duration=v;persist();_updateFramesLabel();},"192px");
+      durInner.append(durNI);
       durRow.append(durCap,durInner);
       const {fpsRow,rifeRow,fpsNI,rifeDD}=createOutputControls({S,mk,tx,infoIcon,NI,DD,persist,updateFramesLabel:()=>_updateFramesLabel()});
       const stepsRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
@@ -4129,8 +4128,7 @@ app.registerExtension({
           _discTmpl=d.prompt_templates||{};
         }catch(e){console.warn("[H3One] load config:",e);}
       };
-      const _updateFramesLabel=()=>{ tx(framesLbl,outputFrameLabel(S.duration,S.fps,S.rifeMultiplier,(seconds)=>snapFrames(seconds,S.fps))); };
-      _updateFramesLabel();
+      const _updateFramesLabel=()=>{};
       _loadModels();
       _loadConfig();
       _loadGallery();
