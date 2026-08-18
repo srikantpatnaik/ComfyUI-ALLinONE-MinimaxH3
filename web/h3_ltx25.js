@@ -69,7 +69,7 @@ export function buildLtx25Workflow(state) {
     positive: {class_type: "CLIPTextEncode", inputs: {text: state.prompt, clip: ref("model_patch", 1)}, _meta: {title: "LTX Positive Prompt"}},
     negative: {class_type: "CLIPTextEncode", inputs: {text: "pc game, console game, video game, cartoon, childish, ugly", clip: ref("model_patch", 1)}, _meta: {title: "LTX Negative Prompt"}},
     conditioning: {class_type: "LTXVConditioning", inputs: {frame_rate: ref("fps"), positive: ref("positive"), negative: ref("negative")}, _meta: {title: "LTX Conditioning"}},
-    fps: {class_type: "PrimitiveInt", inputs: {value: Number(state.fps)}, _meta: {title: "Frame Rate"}},
+    fps: {class_type: "PrimitiveFloat", inputs: {value: Number(state.fps)}, _meta: {title: "Frame Rate"}},
     duration: {class_type: "PrimitiveInt", inputs: {value: Number(state.duration)}, _meta: {title: "Duration"}},
     resize: {class_type: "ResizeImageMaskNode", inputs: {resize_type: "scale longer dimension", "resize_type.longer_size": 1536, scale_method: "lanczos", input: ref("input")}, _meta: {title: "Fit First Frame"}},
     preprocess: {class_type: "LTXVPreprocess", inputs: {img_compression: 18, image: ref("resize")}, _meta: {title: "LTX Image Preprocess"}},
