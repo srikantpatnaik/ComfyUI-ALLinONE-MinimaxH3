@@ -752,7 +752,7 @@ const _finishRun=async()=>{
     tries++;
     await new Promise(res=>setTimeout(res,1500));
   }
-  const postRife=_activeNode?._h3_S?._temporalPostRife:null;
+  const postRife=_activeNode?._h3_S?._temporalPostRife??null;
   const nativeItems=_activeNode?._h3OutputItems||[];
   if(postRife&&nativeItems.length&&_activeNode?._h3PostprocessRife){
     _activeNode._h3_S._temporalPostRife=null;
