@@ -3255,7 +3255,7 @@ app.registerExtension({
           tx(empty,_galleryFavOnly?"No favorite outputs yet.":"No outputs yet.");
           galleryBox.appendChild(empty);return;
         }
-        visible.slice(0,30).forEach(item=>{
+        visible.forEach(item=>{
           const card=mk("div",{width:"96px",flexShrink:"0",cursor:"pointer",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:"7px",overflow:"hidden"});
           const url=api.apiURL(`/view?filename=${encodeURIComponent(item.filename)}&type=output&subfolder=${encodeURIComponent(item.subfolder||"")}`);
           const isImg=item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"");
