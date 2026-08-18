@@ -838,7 +838,12 @@ app.registerExtension({
     nodeType.prototype._buildUI=function(){
       const self=this;
       const saved=loadState();
+      const hasSavedAccel=saved.quality!==undefined||saved.optSol!==undefined||saved.optCache!==undefined||saved.optSage!==undefined;
+      const migrateNativeDefaults=!hasSavedAccel||(saved.settingsVersion===undefined&&saved.quality==="native"&&saved.optSol===false&&saved.optCache===false&&saved.optSage===false);
       if(!self._h3_S){
+        const initialSol=migrateNativeDefaults||saved.optSol===true;
+        const initialCache=!migrateNativeDefaults&&saved.optCache===true;
+        const initialSage=!migrateNativeDefaults&&saved.optSage===true;
         self._h3_S={
           mode:            saved.mode||"t2v",
           prompt:          saved.prompt!==undefined?saved.prompt:"",
@@ -846,10 +851,10 @@ app.registerExtension({
           duration:        saved.duration!==undefined?saved.duration:5,
           temporalBatching: "auto",
           steps:           (saved.steps&&saved.steps!==30)?saved.steps:20,
-          quality:         (saved.optSol===true||saved.optCache===true||saved.optSage===true)?"custom":"native",
-          optSol:          saved.optSol===true,
-          optCache:        saved.optCache===true,
-          optSage:         saved.optSage===true,
+          quality:         (initialSol||initialCache||initialSage)?(migrateNativeDefaults?"balanced":"custom"):"native",
+          optSol:          initialSol,
+          optCache:        initialCache,
+          optSage:         initialSage,
           samplerName:     saved.samplerName||"res_multistep",
           schedulerName:   saved.schedulerName||"simple",
           seed:            (typeof saved.seed==="number")?Math.max(0,Math.min(H3_SEED_MAX,Math.round(saved.seed))):0,
@@ -918,7 +923,7 @@ app.registerExtension({
         if(_updRecipeFn){ try{ _updRecipeFn(); }catch(e){} }
         saveState({
           mode:S.mode,prompt:S.prompt,resolution:S.resolution,duration:S.duration,
-          steps:S.steps,quality:S.quality,temporalBatching:"auto",optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
+          steps:S.steps,quality:S.quality,temporalBatching:"auto",settingsVersion:2,optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
           loras:S.loras,chainClips:S.chainClips.map(c=>({prompt:c.prompt,duration:c.duration})),
           firstFrame:S.firstFrame,lastFrame:S.lastFrame,firstFrameSize:S.firstFrameSize,lastFrameSize:S.lastFrameSize,
           i2vAspect:S.i2vAspect,

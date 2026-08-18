@@ -60,6 +60,9 @@ export async function fetchH3RestoreMetadata(item) {
   const query = `filename=${encodeURIComponent(item.filename)}&subfolder=${encodeURIComponent(item.subfolder || "")}`;
   const response = await fetch(`/h3one/restore_metadata?${query}`);
   const body = await response.text();
+  if (response.status === 404 && !body.trim()) {
+    throw new Error("H3 restore metadata is not loaded in the running server; restart ComfyUI once to enable Reuse settings");
+  }
   let data;
   try {
     data = JSON.parse(body);
