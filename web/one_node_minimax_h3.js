@@ -843,10 +843,10 @@ app.registerExtension({
           duration:        saved.duration!==undefined?saved.duration:5,
           temporalBatching: "auto",
           steps:           (saved.steps&&saved.steps!==30)?saved.steps:20,
-          quality:         "native",
-          optSol:          false,
-          optCache:        false,
-          optSage:         false,
+          quality:         (saved.optSol===true||saved.optCache===true||saved.optSage===true)?"custom":"native",
+          optSol:          saved.optSol===true,
+          optCache:        saved.optCache===true,
+          optSage:         saved.optSage===true,
           samplerName:     saved.samplerName||"res_multistep",
           schedulerName:   saved.schedulerName||"simple",
           seed:            (typeof saved.seed==="number")?Math.max(0,Math.min(H3_SEED_MAX,Math.round(saved.seed))):0,
@@ -915,7 +915,7 @@ app.registerExtension({
         if(_updRecipeFn){ try{ _updRecipeFn(); }catch(e){} }
         saveState({
           mode:S.mode,prompt:S.prompt,resolution:S.resolution,duration:S.duration,
-          steps:S.steps,quality:"native",temporalBatching:"auto",optSol:false,optCache:false,optSage:false,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
+          steps:S.steps,quality:S.quality,temporalBatching:"auto",optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
           loras:S.loras,chainClips:S.chainClips.map(c=>({prompt:c.prompt,duration:c.duration})),
           firstFrame:S.firstFrame,lastFrame:S.lastFrame,firstFrameSize:S.firstFrameSize,lastFrameSize:S.lastFrameSize,
           i2vAspect:S.i2vAspect,
@@ -2449,6 +2449,30 @@ app.registerExtension({
       const stepsCap=mk("div",{fontSize:"10px",color:C.text});tx(stepsCap,"Steps");
       const stepsNI=NI("",S.steps,1,60,1,v=>{S.steps=Math.round(v);persist();},"60px");
       stepsRow.append(stepsCap,stepsNI);
+      const optRow=mk("div",{display:"flex",gap:"5px",flexWrap:"wrap",gridColumn:"1 / -1"});
+      const _optChipSyncs=[];
+      const _mkOptChip=(key,label)=>{
+        const chip=mk("button",{borderRadius:"6px",padding:"3px 9px",fontSize:"9px",fontWeight:"700",cursor:"pointer",outline:"none",transition:"background .15s,color .15s,border-color .15s"},{type:"button"});
+        const _sync=()=>{
+          const on=!!S[key];
+          chip.style.background=on?C.lime:C.bg2;
+          chip.style.color=on?"#111":C.muted;
+          chip.style.border=`1px solid ${on?C.lime:C.border}`;
+          tx(chip,(on?"✓ ":"· ")+label);
+          chip.title=(on?"Enabled":"Disabled")+" - click to "+(on?"disable":"enable");
+        };
+        chip.onclick=()=>{
+          S[key]=!S[key];
+          S.quality=(S.optSol||S.optCache||S.optSage)?"custom":"native";
+          _sync();
+          persist();
+        };
+        _sync();
+        _optChipSyncs.push(_sync);
+        return chip;
+      };
+      const _syncOptChips=()=>_optChipSyncs.forEach(sync=>sync());
+      optRow.append(_mkOptChip("optSol","SolAttn"),_mkOptChip("optCache","H3 Cache"),_mkOptChip("optSage","SageAttn"));
       const SAMPLERS=["euler","euler_cfg_pp","euler_ancestral","euler_ancestral_cfg_pp","heun","heunpp2","exp_heun_2_x0","exp_heun_2_x0_sde","dpm_2","dpm_2_ancestral","lms","dpm_fast","dpm_adaptive","dpmpp_2s_ancestral","dpmpp_2s_ancestral_cfg_pp","dpmpp_sde","dpmpp_sde_gpu","dpmpp_2m","dpmpp_2m_cfg_pp","dpmpp_2m_sde","dpmpp_2m_sde_gpu","dpmpp_2m_sde_heun","dpmpp_2m_sde_heun_gpu","dpmpp_3m_sde","dpmpp_3m_sde_gpu","ddpm","lcm","ipndm","ipndm_v","deis","res_multistep","res_multistep_cfg_pp","res_multistep_ancestral","res_multistep_ancestral_cfg_pp","gradient_estimation","gradient_estimation_cfg_pp","er_sde","seeds_2","seeds_3","sa_solver","sa_solver_pece","ddim","uni_pc","uni_pc_bh2","legacy_rk","rk","rk_beta","deis_3m_ode","deis_2m_ode","deis_3m","deis_2m","res_6s_ode","res_5s_ode","res_3s_ode","res_2s_ode","res_3m_ode","res_2m_ode","res_6s","res_5s","res_3s","res_2s","res_3m","res_2m"];
       const SCHEDULERS=["simple","sgm_uniform","karras","exponential","ddim_uniform","beta","normal","linear_quadratic","kl_optimal","bong_tangent","beta57"];
       const samplerRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
@@ -2463,7 +2487,7 @@ app.registerExtension({
       schedCapRow.append(schedCap,infoIcon("The noise schedule. MiniMax H3's native workflows use simple - keep it unless you know why you're changing it."));
       const schedDD=DD(SCHEDULERS,S.schedulerName||"simple",v=>{S.schedulerName=v;persist();});
       schedRow.append(schedCapRow,schedDD.el);
-      params.append(resRow,durRow,fpsRow,rifeRow,stepsRow,samplerRow,schedRow);
+      params.append(resRow,durRow,fpsRow,rifeRow,stepsRow,optRow,samplerRow,schedRow);
 
       // Custom sampling controls for Image mode (shown when the profile is Custom)
       const imgAdvRow=mk("div",{display:"none",flexDirection:"column",gap:"7px"});
@@ -3104,8 +3128,8 @@ app.registerExtension({
           if(S.steps!==undefined) stepsNI._inp.value=String(S.steps);
           if(S.samplerName) samplerDD.set(S.samplerName);
           if(S.schedulerName) schedDD.set(S.schedulerName);
-          S.quality="native";
-          S.optSol=false;S.optCache=false;S.optSage=false;
+          S.quality=(S.optSol||S.optCache||S.optSage)?"custom":"native";
+          _syncOptChips();
           S.temporalBatching="auto";
           if(S.seed!==undefined) seedNI._inp.value=String(S.seed);
           if(S.batch!==undefined) batchNI._inp.value=String(S.batch);
@@ -3450,6 +3474,41 @@ app.registerExtension({
         });
       };
 
+      const _applyModelAttentionPatches=(wf,modelSrc,newId)=>{
+        const useSol=!!S.optSol, useCache=!!S.optCache, useSage=!!S.optSage;
+        const insSol=()=>{
+          const id=newId();
+          wf[id]={class_type:"SolAttnPatch",inputs:{
+            model:modelSrc,tau:1.3,start_percent:0.2,end_percent:0.9,min_tokens:4096,
+            int8_qk:true,sink_conditioning:"exact_kv_and_rows",morton:false,
+            morton_curve:"2d_frame",int8_pv:true,verbose:true,use_tma:false,dense_blocks:"",
+          },_meta:{title:"Sol-Attn"}};
+          modelSrc=[id,0];
+        };
+        const insCache=()=>{
+          const id=newId();
+          wf[id]={class_type:"MiniMaxH3Cache",inputs:{
+            model:modelSrc,resuse_threshold:0.1,start_percent:0.15,end_percent:0.9,
+            max_steps:2,device:"auto",verbose:false,
+          },_meta:{title:"H3 Cache"}};
+          modelSrc=[id,0];
+        };
+        const insSage=()=>{
+          const id=newId();
+          wf[id]={class_type:"MiniMaxH3MemoryEfficientSageAttentionPatch",inputs:{model:modelSrc},_meta:{title:"SageAttn"}};
+          modelSrc=[id,0];
+        };
+        if(useSage&&useSol){
+          if(useCache) insCache();
+          insSage();insSol();
+        } else {
+          if(useSol) insSol();
+          if(useCache) insCache();
+          if(useSage) insSage();
+        }
+        return modelSrc;
+      };
+
       const _insertModelPatches=(wf)=>{
         let modelSrc=["2",0];
         let nextId=100;
@@ -3460,6 +3519,7 @@ app.registerExtension({
           wf[id]={class_type:"LoraLoaderModelOnly",inputs:{model:modelSrc,lora_name:lr.name,strength_model:lr.strength},_meta:{title:"LoRA"}};
           modelSrc=[id,0];
         });
+        modelSrc=_applyModelAttentionPatches(wf,modelSrc,newId);
         wf["5"].inputs.model=modelSrc;
         wf["9"].inputs.steps=S.steps;
       };
@@ -3934,6 +3994,7 @@ app.registerExtension({
           wf[id]={class_type:"LoraLoaderModelOnly",inputs:{model:modelSrc,lora_name:lr.name,strength_model:lr.strength},_meta:{title:"LoRA"}};
           modelSrc=[id,0];
         });
+        modelSrc=_applyModelAttentionPatches(wf,modelSrc,newId);
         wf["s:5"].inputs.model=modelSrc;
         if(S.livePreview){
           wf["s:lp"]={class_type:"H3StudioTAEH3Preview",inputs:{
