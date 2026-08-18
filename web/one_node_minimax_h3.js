@@ -3922,6 +3922,7 @@ app.registerExtension({
         const session=Date.now().toString(36);
         const temporal=Array.isArray(S._temporalChainClips);
         const temporalMode=S._temporalChainMode||"t2v";
+        const useLegacyMotionContext=S._nativeMotionContext!==true;
         const clips=temporal?S._temporalChainClips:S.chainClips;
         const wf={};
         const sharedKeys=["s:1","s:2","s:3","s:4","s:5"];
@@ -3982,12 +3983,24 @@ app.registerExtension({
           } else {
             const loadId="c"+idx+":load";
             out[loadId]={class_type:"MiniMaxH3MotionContextLoadLatent",inputs:{latent_path:["c"+(idx-1)+":save",0],clip_index:0},_meta:{title:"Load Previous Batch Latent"}};
-            mc.inputs.context_frames=["c"+(idx-1)+":trim",0];
-            mc.inputs.context_latent=[loadId,0];
-            mc.inputs.context_length=S.mcLength;
-            mc.inputs.audio_context_length=S.mcLength;
-            trim.inputs.trim_frames=["c"+idx+":mc",1];
-            mc.inputs.crop="disabled";
+            if(useLegacyMotionContext){
+              const prevFrames=Math.max(1,snapFrames(clips[idx-1].duration,S.fps)-(idx>1?Number(S.mcLength)||22:0));
+              const lastId="c"+idx+":legacy_last";
+              out[lastId]={class_type:"ImageFromBatch",inputs:{image:["c"+(idx-1)+":trim",0],batch_index:Math.max(0,prevFrames-1),length:1},_meta:{title:"Previous Clip Last Frame"}};
+              out["c"+idx+":mc"]={class_type:"H3IdentityAnchor",inputs:{
+                conditioning:["c"+idx+":cond",0],vae:["s:3",0],latent:["c"+idx+":cond",1],
+                frame_count:frames,width:res.width,height:res.height,anchor:"first",image:[lastId,0],
+              },_meta:{title:"Legacy H3 Continuation Anchor"}};
+              delete out[loadId];
+              trim.inputs.trim_frames=1;
+            }else{
+              mc.inputs.context_frames=["c"+(idx-1)+":trim",0];
+              mc.inputs.context_latent=[loadId,0];
+              mc.inputs.context_length=S.mcLength;
+              mc.inputs.audio_context_length=S.mcLength;
+              trim.inputs.trim_frames=["c"+idx+":mc",1];
+              mc.inputs.crop="disabled";
+            }
           }
           if(temporal&&temporalMode==="i2v"&&S.lastFrame&&idx===clips.length-1&&idx>0){
             const lastId="c"+idx+":last";
@@ -4217,6 +4230,7 @@ app.registerExtension({
         try{
           const r=await fetch("/h3one/config");
           const d=await r.json();
+          S._nativeMotionContext=d.native_motion_context?.available===true;
           if(Array.isArray(d.resolution_presets)){
             _resItems=d.resolution_presets;
             resDD.updateItems(_resItems.map(r=>r.label).concat("Custom"));

@@ -19,8 +19,9 @@ This fork stays close to the upstream ALL-in-ONE MiniMax H3 node and keeps its c
 - **VRAM-aware long renders** — on lower-memory GPUs, oversized duration × resolution requests are reduced to an aspect-safe H3 canvas before sampling, preserving the requested duration instead of failing mid-run with CUDA out-of-memory.
 - **Native high-resolution presets** — the Resolution menu includes native 1MP, 1.3MP, 2.1MP, and 2.4MP experimental canvases. When `ComfyUI-KJNodes` is installed, large H3 workloads automatically add its exact low-VRAM attention and feed-forward chunk patches.
 - **Native resolution-aware temporal batching** — `Temporal batches → Auto (RAM offload, resolution-aware)` keeps the selected canvas unchanged, chooses shorter H3-native chunks as pixel area grows, uses Motion Context continuation, and assembles one final video. This includes the exact 800×1088 portrait canvas and larger-than-1MP canvases; it is temporal batching, not upscaling or pixel downscaling. When enabled, RIFE runs afterward on the finished assembled file so 2x/4x interpolation remains available.
+- **Older-core chain fallback** — the node probes for ComfyUI PR #15439's native arbitrary-guide support. On older ComfyUI builds it automatically falls back to a final-frame H3 anchor for Chain and temporal continuation instead of sending an incompatible graph to `MiniMaxH3MotionContext`; native Motion Context remains enabled when available.
 
-The additions are isolated in `web/h3_model_features.js`, `web/h3_output_features.js`, `web/h3_i2v_aspect.js`, `web/h3_output_context.js`, `h3_i2v_aspect.py`, and `h3_preserve_extension.py`; the main node file only contains the small integration points. Everything else below describes the upstream project.
+The additions are isolated in `web/h3_model_features.js`, `web/h3_output_features.js`, `web/h3_i2v_aspect.js`, `web/h3_output_context.js`, `h3_i2v_aspect.py`, `h3_motion_compat.py`, and `h3_preserve_extension.py`; the main node file only contains the small integration points. Everything else below describes the upstream project.
 
 One node. The whole MiniMax H3 video pipeline.
 

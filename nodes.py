@@ -16,6 +16,7 @@ from aiohttp import web
 from server import PromptServer
 
 from .h3_i2v_aspect import MiniMaxH3I2VAspectFit
+from .h3_motion_compat import native_motion_context_status
 from .h3_preserve_extension import MiniMaxH3PreserveExtension
 
 NODE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -528,7 +529,9 @@ async def get_tae_status(request):
 
 @PromptServer.instance.routes.get("/h3one/config")
 async def get_config(request):
-    return web.json_response(_load_config())
+    config = _load_config()
+    config["native_motion_context"] = native_motion_context_status()
+    return web.json_response(config)
 
 
 @PromptServer.instance.routes.post("/h3one/config")
