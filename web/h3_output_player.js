@@ -35,7 +35,7 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
   const applySettings=()=>{
     vidEl.muted=muted;
     vidEl.playbackRate=rates[rateIndex];
-    vidEl.loop=saved.loop===true;
+    vidEl.loop=saved.loop!==false;
   };
   const applyZoom=()=>{
     const transform=zoom===1?"":"scale("+zoom+")";
