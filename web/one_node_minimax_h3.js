@@ -1169,6 +1169,24 @@ app.registerExtension({
       const vaeARow=_mkModelRow("vaeAudio","Audio VAE");
       const taeRow=_mkModelRow("tae","Live Preview decoder (TAEH3)");
       taeRow.firstChild.appendChild(infoIcon("The tiny decoder used by the Live Preview toggle under the video. Every taeh3.safetensors found in a ComfyUI models/vae_approx folder is listed here. The node auto-picks one when your selection goes missing; change it here if you want a specific copy."));
+      const ltxSettingsHdr=mk("div",{display:"flex",alignItems:"center",gap:"6px",marginTop:"8px",marginBottom:"10px",paddingTop:"12px",borderTop:`1px solid ${C.border}`});
+      const ltxSettingsTitle=mk("div",{fontSize:"9px",fontWeight:"700",letterSpacing:".1em",textTransform:"uppercase",color:C.muted});
+      tx(ltxSettingsTitle,"LTX-2.5 models");
+      ltxSettingsHdr.append(ltxSettingsTitle,infoIcon("These models are used only by the LTX 2.5 tab. H3 keeps its own text encoder and VAE selections above."));
+      const _mkLtxModelRow=(key,label,items=[S.ltx25[key]||""],onChange)=>{
+        const w=mk("div",{marginBottom:"12px"});
+        w.appendChild(cap(label));
+        const dd=DD(items,S.ltx25[key],v=>{S.ltx25[key]=v;persist();onChange&&onChange(v);});
+        w.appendChild(dd.el);
+        modelDDs[`ltx_${key}`]=dd;
+        return w;
+      };
+      const ltxClipRow=_mkLtxModelRow("clip","Text encoder (CLIP)");
+      const ltxUnetRow=_mkLtxModelRow("unet","Diffusion model");
+      const ltxVideoVaeRow=_mkLtxModelRow("videoVae","Video VAE");
+      const ltxAudioVaeRow=_mkLtxModelRow("audioVae","Audio VAE");
+      const ltxUpscaleRow=_mkLtxModelRow("upscaleModel","Latent upscaler");
+      const ltxLoraRow=_mkLtxModelRow("lora","LoRA");
       const upMethodWrap=mk("div",{marginBottom:"12px"});
       const upMethodCapRow=mk("div",{display:"flex",alignItems:"center",gap:"4px"});
       const upMethodCap=mk("div",{fontSize:"9px",fontWeight:"700",letterSpacing:".1em",textTransform:"uppercase",color:C.muted});
@@ -1222,7 +1240,7 @@ app.registerExtension({
       tx(supBtn,"Buy me a coffee");
       supBtn.onclick=()=>window.open(SUPPORT_URL,"_blank");
       supWrap.append(supCap,supBtn);
-      settingsOverlay.append(settHdr,unetT2VRow,unetR2VRow,clipRow,vaeVRow,vaeARow,taeRow,upMethodWrap,upDitRow,upVaeRow,upHint,audioToggle.el,soundToggle.el,playOnFinishToggle.el,sndWrap,accWrap,supWrap);
+      settingsOverlay.append(settHdr,unetT2VRow,unetR2VRow,clipRow,vaeVRow,vaeARow,taeRow,ltxSettingsHdr,ltxClipRow,ltxUnetRow,ltxVideoVaeRow,ltxAudioVaeRow,ltxUpscaleRow,ltxLoraRow,upMethodWrap,upDitRow,upVaeRow,upHint,audioToggle.el,soundToggle.el,playOnFinishToggle.el,sndWrap,accWrap,supWrap);
 
       // -- HISTORY OVERLAY ---------------------------------------------------
       const historyOverlay=mk("div",{
@@ -4249,6 +4267,15 @@ app.registerExtension({
           modelDDs.clip.updateItems(clipItems);
           modelDDs.vaeVideo.updateItems(_M.vaes);
           modelDDs.vaeAudio.updateItems(_M.vaes);
+          const ltxClipItems=_M.text_encoders.filter(name=>/ltx[- .]?2\.5|gemma.*ltx[- .]?2\.5/i.test(name));
+          const ltxDiffusionItems=_M.diffusion.filter(name=>/ltx[- .]?2\.5/i.test(name));
+          const ltxVideoVaeItems=_M.vaes.filter(name=>/ltx[- .]?2\.5.*video.*vae/i.test(name));
+          const ltxAudioVaeItems=_M.vaes.filter(name=>/ltx[- .]?2\.5.*audio.*vae/i.test(name));
+          modelDDs.ltx_clip.updateItems(ltxClipItems.length?ltxClipItems:[S.ltx25.clip]);
+          modelDDs.ltx_unet.updateItems(ltxDiffusionItems.length?ltxDiffusionItems:[S.ltx25.unet]);
+          modelDDs.ltx_videoVae.updateItems(ltxVideoVaeItems.length?ltxVideoVaeItems:[S.ltx25.videoVae]);
+          modelDDs.ltx_audioVae.updateItems(ltxAudioVaeItems.length?ltxAudioVaeItems:[S.ltx25.audioVae]);
+          modelDDs.ltx_lora.updateItems(["None"].concat(_M.loras.filter(name=>/ltx[\\/]bb(?:\.safetensors)?$/i.test(name))));
           const loraItems=_M.loras.length?_M.loras:["none"];
           _renderLoras();
           _checkTae();
