@@ -1753,6 +1753,7 @@ app.registerExtension({
         _fsNodeOverlay.style.display="flex";_fsNodeOverlay.setAttribute("tabindex","-1");_fsNodeOverlay.focus();
         fsNodeBtn.innerHTML=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v5H3M16 3v5h5M8 21v-5H3M16 21v-5h5"/></svg>`;
         _inFullscreen=true;
+        _syncFullscreenOverlay?.();
       };
       const _exitFullscreen=()=>{
         if(!_inFullscreen) return;
@@ -1764,6 +1765,7 @@ app.registerExtension({
         _fsNodeOverlay._scWrap=null;_fsNodeOverlay.style.display="none";
         fsNodeBtn.innerHTML=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>`;
         _inFullscreen=false;
+        _syncFullscreenOverlay?.();
       };
       fsNodeBtn.onclick=()=>{ if(_inFullscreen) _exitFullscreen();else _enterFullscreen(); };
 
@@ -2748,13 +2750,20 @@ app.registerExtension({
       previewFavBtn.onmouseleave=()=>{previewFavBtn.style.borderColor=C.border;};
       const previewMeta=mk("div",{}, {className:"h3-previewmeta"});
       previewMeta.append(resolutionChip,previewFavBtn,seedChip);
+      const fullscreenProvider=mk("div",{position:"absolute",top:"10px",left:"10px",display:"none",padding:"4px 7px",borderRadius:"5px",background:"rgba(0,0,0,.78)",color:"#fff",fontSize:"10px",fontWeight:"700",letterSpacing:".04em",lineHeight:"1.2",zIndex:"8",pointerEvents:"none"},{textContent:"H3"});
       const liveChip=mk("div",{}, {className:"h3-livechip"});
       const liveDot=mk("span",{}, {className:"lcdot"});
       const liveTxt=mk("span",{}, {className:"lctxt",textContent:"Live preview"});
       liveChip.append(liveDot,liveTxt);
-      document.addEventListener("fullscreenchange",()=>{
-        previewMeta.style.display=document.fullscreenElement===previewBox?"none":"";
-      });
+      const _providerLabel=item=>item&&(item.engine==="ltx25"||item.mode==="ltx25-i2v"||/ltx25/i.test(item.filename||""))?"LTX2.5":"H3";
+      const _syncFullscreenOverlay=()=>{
+        const isPreviewFullscreen=!!document.fullscreenElement&&previewBox.contains(document.fullscreenElement);
+        const isFullscreen=_inFullscreen||isPreviewFullscreen;
+        previewMeta.style.display=isFullscreen?"none":"";
+        tx(fullscreenProvider,_providerLabel(_curItem));
+        fullscreenProvider.style.display=isFullscreen?"block":"none";
+      };
+      document.addEventListener("fullscreenchange",_syncFullscreenOverlay);
       const _showLiveChip=(show,dim=false)=>{
         liveChip.classList.toggle("dim",!!dim);
         liveChip.style.display=show?"flex":"none";
@@ -2777,7 +2786,7 @@ app.registerExtension({
       };
       self._h3_lpReset=()=>{ _showLiveChip(true,true); };
       self._h3_lpErr=(msg)=>{ _showLiveChip(false); showError(msg); };
-      previewBox.append(placeholder,vidEl,imgEl,errorBox,progWrap,previewMeta,liveChip);
+      previewBox.append(placeholder,vidEl,imgEl,errorBox,progWrap,previewMeta,fullscreenProvider,liveChip);
       const comparerWrap=mk("div",{position:"absolute",inset:"0",display:"none",cursor:"col-resize",userSelect:"none",borderRadius:"10px",overflow:"hidden",zIndex:"3"},{tabIndex:"0",role:"slider","aria-label":"Image comparison position","aria-valuemin":"0","aria-valuemax":"100","aria-valuenow":"50"});
       const cmpBase=mk("video",{position:"absolute",inset:"0",width:"100%",height:"100%",objectFit:"contain",background:"#000",display:"none"},{muted:true,loop:true,preload:"auto"});
       const cmpBaseImg=mk("img",{position:"absolute",inset:"0",width:"100%",height:"100%",objectFit:"contain",background:"#000",display:"none"},{alt:"Comparison source"});
@@ -3130,6 +3139,7 @@ app.registerExtension({
       previewFavBtn.onclick=()=>_favCurrent();
       const _showVideo=(item,fromFinish)=>{
         _curItem=item;
+        _syncFullscreenOverlay();
         outputPlayer?.resetZoom();
         _updatePreviewFavorite();
         if(_cmpMode) _exitCompare();
@@ -3262,6 +3272,7 @@ app.registerExtension({
         await fetch("/h3one/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:_curItem.filename,subfolder:_curItem.subfolder||""})}).catch(()=>{});
         vidEl.src="";vidEl.style.display="none";imgEl.src="";imgEl.style.display="none";placeholder.style.display="flex";
         _curItem=null;
+        _syncFullscreenOverlay();
         _updatePreviewFavorite();
         _loadGallery();
       };
