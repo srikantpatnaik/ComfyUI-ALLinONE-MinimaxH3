@@ -2690,6 +2690,9 @@ app.registerExtension({
       const liveDot=mk("span",{}, {className:"lcdot"});
       const liveTxt=mk("span",{}, {className:"lctxt",textContent:"Live preview"});
       liveChip.append(liveDot,liveTxt);
+      document.addEventListener("fullscreenchange",()=>{
+        previewMeta.style.display=document.fullscreenElement===previewBox?"none":"";
+      });
       const _showLiveChip=(show,dim=false)=>{
         liveChip.classList.toggle("dim",!!dim);
         liveChip.style.display=show?"flex":"none";
