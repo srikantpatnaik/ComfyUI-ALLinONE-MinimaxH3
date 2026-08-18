@@ -752,6 +752,29 @@ const _finishRun=async()=>{
     tries++;
     await new Promise(res=>setTimeout(res,1500));
   }
+  const postRife=_activeNode?._h3_S?._temporalPostRife:null;
+  const nativeItems=_activeNode?._h3OutputItems||[];
+  if(postRife&&nativeItems.length&&_activeNode?._h3PostprocessRife){
+    _activeNode._h3_S._temporalPostRife=null;
+    try{
+      const postIds=await _activeNode._h3PostprocessRife(nativeItems,postRife);
+      if(postIds.length){
+        _activeShownFiles=[];
+        _activeNode._h3OutputItems=[];
+        _batchIds=postIds;
+        _batchDone=0;
+        _activePromptId=postIds[postIds.length-1];
+        _activeGenStartTs=Date.now();
+        _activeSetStage?.(`RIFE ${postRife.multiplier}x after assembly...`,10);
+        _armFinishWatch();
+        return;
+      }
+    }catch(e){
+      _activeShowError?.(`RIFE post-processing failed: ${fmtErr(e)}`);
+      _activeResetBtn?.();
+      return;
+    }
+  }
   _activeResetBtn?.();
   const S=_activeNode?._h3_S;
   if(S && S.soundEnabled!==false && S.sound!=="off") playDone(S.sound||"chime");
@@ -3188,6 +3211,8 @@ app.registerExtension({
       };
       const showOutput=(item)=>{
         errorBox.style.display="none";
+        self._h3OutputItems=self._h3OutputItems||[];
+        self._h3OutputItems.push(item);
         if(S.seed!==undefined&&S.seed!==null&&S.seed!=="") _seedByFile[item.filename]=S.seed;
         const genMs=Date.now()-_activeGenStartTs;
         _genTimeByFile[item.filename]=genMs;
@@ -3647,7 +3672,7 @@ app.registerExtension({
         const plan=_temporalBatchClips();
         if(!plan) return null;
         if(S.mode==="i2v"&&!S.firstFrame) throw new Error("Temporal I2V batching needs a First frame. Add one or turn Temporal batches off.");
-        if(Number(S.rifeMultiplier)!==1) throw new Error("Temporal batching currently requires RIFE 1x. Generate the native assembled video first, then run RIFE on the finished file.");
+        S._temporalPostRife=Number(S.rifeMultiplier)>1?{fps:S.fps,multiplier:Number(S.rifeMultiplier)}:null;
         S._temporalChainClips=plan.clips;
         S._temporalChainMode=S.mode;
         S._temporalBatchActive=true;
@@ -3785,6 +3810,26 @@ app.registerExtension({
           wf["14"].inputs.source_file=S.extendVideo;
         }
         return wf;
+      };
+
+      self._h3PostprocessRife=async(items,settings)=>{
+        const ids=[];
+        for(const item of items){
+          const stage=await fetch("/h3one/stage_input",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:item.filename,subfolder:item.subfolder||""})});
+          const sd=await stage.json();
+          if(!sd.ok) throw new Error(sd.error||"Could not stage the assembled video for RIFE");
+          const wf=await _fetchTpl("rife_postprocess.json");
+          wf["1"].inputs.file=sd.name;
+          wf["3"].inputs.multiplier=settings.multiplier;
+          wf["4"].inputs.fps=Number(settings.fps)*Number(settings.multiplier);
+          _applyAutoSave(wf);
+          const body={prompt:wf,client_id:api.clientId,extra_data:{enable_previews:true}};
+          const res=await api.fetchApi("/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+          const data=await res.json();
+          if(data.error||!data.prompt_id) throw new Error(data.error?.message||JSON.stringify(data.error)||"Could not queue RIFE post-processing");
+          ids.push(data.prompt_id);
+        }
+        return ids;
       };
 
       const _buildChain=async()=>{
@@ -3939,7 +3984,7 @@ app.registerExtension({
             if(cond&&cond.inputs&&Array.isArray(cond.inputs.clip)) cond.inputs.clip=["s:bust",0];
           });
         }
-        patchOutputVideo(wf,S.fps,S.rifeMultiplier);
+        patchOutputVideo(wf,S.fps,temporal?1:S.rifeMultiplier);
         _applyAutoSave(wf);
         if(temporal){
           let audioSrc=["c0:trim",1];
@@ -3966,6 +4011,8 @@ app.registerExtension({
       genBtn.onclick=async()=>{
         if(S.generating) return;
         _upOrig=null;_upResult=null;
+        delete S._temporalPostRife;
+        self._h3OutputItems=[];
         if(_cmpMode) _exitCompare();
         _cmpImageRefs=S.mode==="image"&&["edit","refmix"].includes(S.imgSub)?(S.imgRefs||[]).filter(Boolean).slice(0,S.imgSub==="edit"?1:9):[];
         _cmpImageRefIndex=0;
@@ -4088,6 +4135,7 @@ app.registerExtension({
           if(Array.isArray(d.resolution_presets)){
             _resItems=d.resolution_presets;
             resDD.updateItems(_resItems.map(r=>r.label).concat("Custom"));
+            resDD.set(S.resolution);
             if(S.resolution!=="Custom"&&!_resItems.some(r=>r.label===S.resolution)&&_resItems.length){
               S.resolution=_resItems[0].label;resDD.set(S.resolution);persist();
             }

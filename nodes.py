@@ -133,7 +133,7 @@ _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
 _ALLOWED_TEMPLATES = (
     "t2v.json", "i2v.json", "r2v.json", "audio_drive.json",
     "keyframes.json", "video_extend.json", "chain_section.json", "upscale.json",
-    "upscale_rtx.json", "image.json",
+    "upscale_rtx.json", "rife_postprocess.json", "image.json",
 )
 
 
