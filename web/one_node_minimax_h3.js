@@ -1166,6 +1166,7 @@ app.registerExtension({
 
       let _M={diffusion:[],text_encoders:[],vaes:[],loras:[]};
       const modelDDs={};
+      let ltxMainLoraDD=null;
       const _mkModelRow=(key,label,items=[],onChange)=>{
         const w=mk("div",{marginBottom:"12px"});
         w.appendChild(cap(label));
@@ -1188,7 +1189,7 @@ app.registerExtension({
       const _mkLtxModelRow=(key,label,items=[S.ltx25[key]||""],onChange)=>{
         const w=mk("div",{marginBottom:"12px"});
         w.appendChild(cap(label));
-        const dd=DD(items,S.ltx25[key],v=>{S.ltx25[key]=v;persist();onChange&&onChange(v);});
+        const dd=DD(items,S.ltx25[key],v=>{S.ltx25[key]=v;persist();if(key==="lora") ltxMainLoraDD?.set(v);onChange&&onChange(v);});
         w.appendChild(dd.el);
         modelDDs[`ltx_${key}`]=dd;
         return w;
@@ -1198,7 +1199,7 @@ app.registerExtension({
       const ltxVideoVaeRow=_mkLtxModelRow("videoVae","Video VAE");
       const ltxAudioVaeRow=_mkLtxModelRow("audioVae","Audio VAE");
       const ltxUpscaleRow=_mkLtxModelRow("upscaleModel","Latent upscaler");
-      const ltxLoraRow=_mkLtxModelRow("lora","LoRA");
+      const ltxLoraRow=_mkLtxModelRow("lora","LoRA",["None",S.ltx25.lora||"None"]);
       const upMethodWrap=mk("div",{marginBottom:"12px"});
       const upMethodCapRow=mk("div",{display:"flex",alignItems:"center",gap:"4px"});
       const upMethodCap=mk("div",{fontSize:"9px",fontWeight:"700",letterSpacing:".1em",textTransform:"uppercase",color:C.muted});
@@ -2144,6 +2145,19 @@ app.registerExtension({
       const ltx25UI=createLtx25Panel({S,mk,tx,NI,DD,ImgSlot,infoIcon,persist,seedMax:H3_SEED_MAX});
       const ltx25Area=ltx25UI.el;
       _updateLtxModeSections=()=>ltx25UI.setMode(S.ltx25.mode||"i2v");
+      const ltxLoraArea=mk("div",{display:"flex",flexDirection:"column",gap:"7px"},{className:"h3-card"});
+      const ltxLoraHdr=mk("div",{display:"flex",alignItems:"center",gap:"6px"});
+      const ltxLoraTitle=mk("div",{fontSize:"9px",fontWeight:"700",letterSpacing:".1em",textTransform:"uppercase",color:C.muted});
+      tx(ltxLoraTitle,"LTX-2.5 LoRA");
+      ltxLoraHdr.append(ltxLoraTitle,infoIcon("Select an LTX-2.5-compatible LoRA for the native LTX workflow. The available choices come from ComfyUI's LoRA folder."));
+      const ltxLoraHint=mk("div",{fontSize:"8px",color:C.muted,lineHeight:"1.4"});
+      tx(ltxLoraHint,"Choose a loaded LTX-2.5 LoRA for this tab.");
+      ltxMainLoraDD=DD(["None",S.ltx25.lora||"None"],S.ltx25.lora||"None",value=>{
+        S.ltx25.lora=value==="None"?"None":value;
+        persist();
+        modelDDs.ltx_lora?.set(S.ltx25.lora);
+      });
+      ltxLoraArea.append(ltxLoraHdr,ltxLoraHint,ltxMainLoraDD.el);
       if(S.firstFrame) firstSlot._restorePreview(S.firstFrame);
       if(S.lastFrame) lastSlot._restorePreview(S.lastFrame);
 
@@ -4310,7 +4324,9 @@ app.registerExtension({
           modelDDs.ltx_unet.updateItems(ltxDiffusionItems.length?ltxDiffusionItems:[S.ltx25.unet]);
           modelDDs.ltx_videoVae.updateItems(ltxVideoVaeItems.length?ltxVideoVaeItems:[S.ltx25.videoVae]);
           modelDDs.ltx_audioVae.updateItems(ltxAudioVaeItems.length?ltxAudioVaeItems:[S.ltx25.audioVae]);
-          modelDDs.ltx_lora.updateItems(["None"].concat(_M.loras.filter(name=>/ltx[\\/]bb(?:\.safetensors)?$/i.test(name))));
+          const ltxLoraItems=["None"].concat(_M.loras.filter(name=>/ltx[\\/]bb(?:\.safetensors)?$/i.test(name)));
+          modelDDs.ltx_lora.updateItems(ltxLoraItems);
+          ltxMainLoraDD?.updateItems(ltxLoraItems);
           const loraItems=_M.loras.length?_M.loras:["none"];
           _renderLoras();
           _checkTae();
@@ -4376,6 +4392,7 @@ app.registerExtension({
         });
         modesWrap.style.display="";
         ltx25Area.style.display=isH3?"none":"flex";
+        ltxLoraArea.style.display=isH3?"none":"flex";
         loraArea.style.display=isH3?"":"none";
         tuneCard.style.display=isH3?"":"none";
         if(isH3){
@@ -4415,7 +4432,7 @@ app.registerExtension({
       };
       _updRecipe();
       _updRecipeFn=_updRecipe;
-      leftPanel.append(promptCard,modeCard,tuneCard,loraArea,ltx25Area);
+      leftPanel.append(promptCard,modeCard,tuneCard,loraArea,ltx25Area,ltxLoraArea);
       _applyFold("prompt",promptHdr,promptWrap,promptChev);
       _applyFold("mode",modeHdr,modeArea,modeChev);
       _applyFold("params",paramsHdr,tuneBody,paramsChev);
