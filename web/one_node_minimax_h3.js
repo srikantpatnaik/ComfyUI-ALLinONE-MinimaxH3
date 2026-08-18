@@ -3910,7 +3910,6 @@ app.registerExtension({
           wf["1"].inputs.file=sd.name;
           wf["3"].inputs.multiplier=settings.multiplier;
           wf["4"].inputs.fps=Number(settings.fps)*Number(settings.multiplier);
-          _applyAutoSave(wf);
           const body={prompt:wf,client_id:api.clientId,extra_data:{enable_previews:true}};
           const res=await api.fetchApi("/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
           const data=await res.json();
