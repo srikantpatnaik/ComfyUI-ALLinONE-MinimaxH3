@@ -1511,7 +1511,7 @@ app.registerExtension({
           tx(name,(item.favorite?"★ ":"")+item.filename);
           card.append(v,name);
           card.onclick=()=>_libOpen(item);
-          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend});
+          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onCopy:_copyVideoToInput});
           card.onmouseenter=()=>card.style.borderColor=C.lime;
           card.onmouseleave=()=>card.style.borderColor=C.border;
           libGrid.appendChild(card);
@@ -2600,24 +2600,16 @@ app.registerExtension({
       const seedChip=mk("div",{}, {className:"h3-seedchip"});
       const seedChipLbl=mk("span",{}, {className:"scl",textContent:"Seed"});
       const seedChipVal=mk("span",{}, {className:"scv",textContent:""});
-      const seedChipCopy=mk("button",{}, {type:"button",className:"h3-seedbtn",title:"Copy seed value","aria-label":"Copy seed value"});
-      seedChipCopy.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-      seedChipCopy._lbl=mk("span",{}, {textContent:"Copy"});
-      seedChipCopy.appendChild(seedChipCopy._lbl);
-      seedChipCopy.onclick=async(e)=>{
-        e.stopPropagation();
-        const ok=await h3Copy(seedChipVal.textContent);
-        tx(seedChipCopy._lbl,ok?"Copied":"Failed");
-        seedChipCopy.classList.add(ok?"ok":"err");
-        setTimeout(()=>{ tx(seedChipCopy._lbl,"Copy"); seedChipCopy.classList.remove("ok","err"); },1300);
-      };
-      seedChip.append(seedChipLbl,seedChipVal,seedChipCopy);
+      seedChip.append(seedChipLbl,seedChipVal);
       const resolutionChip=mk("div",{}, {className:"h3-seedchip"});
       const resolutionChipLbl=mk("span",{}, {className:"scl",textContent:"Resolution"});
       const resolutionChipVal=mk("span",{}, {className:"scv",textContent:""});
       resolutionChip.append(resolutionChipLbl,resolutionChipVal);
+      const previewFavBtn=mk("button",{display:"none",alignItems:"center",justifyContent:"center",width:"28px",height:"26px",padding:"0",border:`1px solid ${C.border}`,borderRadius:"7px",background:C.bg2,color:C.muted,fontSize:"18px",lineHeight:"1",cursor:"pointer",outline:"none"},{type:"button",title:"Favorite output","aria-label":"Favorite output"});
+      previewFavBtn.onmouseenter=()=>{previewFavBtn.style.borderColor=C.lime;};
+      previewFavBtn.onmouseleave=()=>{previewFavBtn.style.borderColor=C.border;};
       const previewMeta=mk("div",{}, {className:"h3-previewmeta"});
-      previewMeta.append(resolutionChip,seedChip);
+      previewMeta.append(resolutionChip,previewFavBtn,seedChip);
       const liveChip=mk("div",{}, {className:"h3-livechip"});
       const liveDot=mk("span",{}, {className:"lcdot"});
       const liveTxt=mk("span",{}, {className:"lctxt",textContent:"Live preview"});
@@ -2822,6 +2814,7 @@ app.registerExtension({
       galleryRefresh.onmouseleave=()=>{galleryRefresh.style.borderColor=C.border;galleryRefresh.style.color=C.muted;};
       galleryRefresh.onclick=()=>_loadGallery();
       const galleryActs=mk("div",{display:"flex",gap:"5px",alignItems:"center"});
+      let _galleryFavOnly=false;
       const actBtn=(l,cb,opts={})=>{
         const b=mk("button",{}, {type:"button",className:"h3-actbtn"+(opts.danger?" danger":"")+(opts.warn?" warn":"")+(opts.on?" on":"")});
         if(opts.icon) b.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${opts.icon}</svg>`;
@@ -2832,12 +2825,13 @@ app.registerExtension({
         return b;
       };
       const ICON_FAV='<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>';
-      const ICON_OPEN='<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/>';
       const ICON_UP='<path d="M12 19V5"/><path d="M5 12l7-7 7 7"/>';
       const ICON_DEL='<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>';
       const ICON_REFRESH='<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>';
       const upBtn=actBtn("2x Upscale",()=>_runUpscale(),{icon:ICON_UP});
       const upFactorWrap=mk("div",{width:"74px",flexShrink:"0"});
+      upBtn.style.display="none";
+      upFactorWrap.style.display="none";
       const upFactorDD=DD(["2x","3x","4x"],S.upscaleFactor+"x",v=>{
         S.upscaleFactor=parseInt(v)||2;
         tx(upBtn._lbl,S.upscaleFactor+"x Upscale");
@@ -2864,6 +2858,7 @@ app.registerExtension({
         if(rtx){
           upBtn.title="Upscale "+S.upscaleFactor+"x via RTX VSR\nNo model needed - uses your GPU's super resolution";
           upBtn.classList.remove("warn");
+          _syncUpscaleShortcut();
           return;
         }
         const d=S.models.upscaleDit, v=S.models.upscaleVae;
@@ -2874,10 +2869,20 @@ app.registerExtension({
           upBtn.title="Upscale via SeedVR2\nNo upscale model selected - open Settings";
           upBtn.classList.add("warn");
         }
+        _syncUpscaleShortcut();
       };
+      const _syncUpscaleShortcut=()=>{
+        const configured=!!(S.models.upscaleDit&&S.models.upscaleDit!=="none"&&S.models.upscaleVae&&S.models.upscaleVae!=="none");
+        upBtn.style.display=configured?"inline-flex":"none";
+        upFactorWrap.style.display=configured?"block":"none";
+      };
+      const galleryFavBtn=actBtn("Favorites",()=>{
+        _galleryFavOnly=!_galleryFavOnly;
+        _updateGalleryFavoriteFilter();
+        _loadGallery();
+      },{icon:ICON_FAV,title:"Show favorite outputs"});
       galleryActs.append(
-        actBtn("Favorite",()=>_favCurrent(),{icon:ICON_FAV}),
-        actBtn("Open",()=>_openCurrent(),{icon:ICON_OPEN}),
+        galleryFavBtn,
         upBtn,upFactorWrap,
         actBtn("Delete",()=>_delCurrent(),{icon:ICON_DEL,danger:true})
       );
@@ -2967,8 +2972,23 @@ app.registerExtension({
 
       let _galItems=[];
       let _curItem=null;
+      const _updateGalleryFavoriteFilter=()=>{
+        galleryFavBtn.classList.toggle("on",_galleryFavOnly);
+        tx(galleryFavBtn._lbl,_galleryFavOnly?"All":"Favorites");
+        galleryFavBtn.title=_galleryFavOnly?"Show all outputs":"Show favorite outputs";
+      };
+      const _updatePreviewFavorite=()=>{
+        const active=!!_curItem;
+        previewFavBtn.style.display=active?"inline-flex":"none";
+        previewFavBtn.textContent=active&&_curItem.favorite?"★":"☆";
+        previewFavBtn.style.color=active&&_curItem.favorite?C.lime:C.muted;
+        previewFavBtn.title=active&&_curItem.favorite?"Remove from favorites":"Add to favorites";
+        previewFavBtn.setAttribute("aria-label",previewFavBtn.title);
+      };
+      previewFavBtn.onclick=()=>_favCurrent();
       const _showVideo=(item,fromFinish)=>{
         _curItem=item;
+        _updatePreviewFavorite();
         if(_cmpMode) _exitCompare();
         const imageCompare=S.mode==="image"&&["edit","refmix"].includes(S.imgSub)&&_cmpImageRefs.length>0&&_isImageItem(item);
         const upscaleCompare=!!(_upResult&&item.filename===_upResult.filename);
@@ -3004,6 +3024,16 @@ app.registerExtension({
         vidEl.muted=false;
         vidEl.play().catch(()=>{ vidEl.muted=true; vidEl.play().catch(()=>{}); });
       };
+      const _copyVideoToInput=async(item)=>{
+        if(!item||item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"")) return;
+        try{
+          const stage=await fetch("/h3one/stage_input",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:item.filename,subfolder:item.subfolder||""})});
+          const sd=await stage.json();
+          if(!sd.ok) throw new Error(sd.error||"Could not copy the video to the input folder");
+        }catch(e){
+          showError("Could not copy video to input: "+fmtErr(e));
+        }
+      };
       const _stageVideoForExtend=async(item,selectMode=true)=>{
         if(!item||item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"")) return;
         try{
@@ -3022,11 +3052,9 @@ app.registerExtension({
         if(!_curItem) return;
         const nf=!_curItem.favorite;
         await fetch("/h3one/favorite",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:_curItem.filename,favorite:nf})}).catch(()=>{});
+        _curItem.favorite=nf;
+        _updatePreviewFavorite();
         _loadGallery();
-      };
-      const _openCurrent=()=>{
-        if(!_curItem) return;
-        fetch("/h3one/open_folder",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:_curItem.filename,subfolder:_curItem.subfolder||""})}).catch(()=>{});
       };
       const _delCurrent=async()=>{
         if(!_curItem) return;
@@ -3034,6 +3062,7 @@ app.registerExtension({
         await fetch("/h3one/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:_curItem.filename,subfolder:_curItem.subfolder||""})}).catch(()=>{});
         vidEl.src="";vidEl.style.display="none";imgEl.src="";imgEl.style.display="none";placeholder.style.display="flex";
         _curItem=null;
+        _updatePreviewFavorite();
         _loadGallery();
       };
       const _runUpscale=async()=>{
@@ -3086,12 +3115,13 @@ app.registerExtension({
           const d=await r.json();
           _galItems=d.videos||[];
         }catch(e){ _galItems=[]; }
-        if(!_galItems.length){
+        const visible=_galItems.filter(item=>!_galleryFavOnly||item.favorite);
+        if(!visible.length){
           const empty=mk("div",{fontSize:"9px",color:C.muted,padding:"6px 0"});
-          tx(empty,"No outputs yet.");
+          tx(empty,_galleryFavOnly?"No favorite outputs yet.":"No outputs yet.");
           galleryBox.appendChild(empty);return;
         }
-        _galItems.slice(0,30).forEach(item=>{
+        visible.slice(0,30).forEach(item=>{
           const card=mk("div",{width:"96px",flexShrink:"0",cursor:"pointer",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:"7px",overflow:"hidden"});
           const url=api.apiURL(`/view?filename=${encodeURIComponent(item.filename)}&type=output&subfolder=${encodeURIComponent(item.subfolder||"")}`);
           const isImg=item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"");
@@ -3104,7 +3134,7 @@ app.registerExtension({
           if(item.favorite) name.style.color=C.lime;
           card.append(v,name);
           card.onclick=()=>_showVideo(item);
-          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend});
+          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onCopy:_copyVideoToInput});
           card.onmouseenter=()=>card.style.borderColor=C.lime;
           card.onmouseleave=()=>card.style.borderColor=C.border;
           galleryBox.appendChild(card);
@@ -3954,10 +3984,10 @@ app.registerExtension({
         _activePromptId=null;
         S.generating=true;
         genBtn.disabled=true;tx(genBtnLbl,"Generating...");
-        genBtn.style.background="linear-gradient(270deg,var(--h3accent),#e8d5c0,#a259ff,var(--h3accent))";
-        genBtn.style.backgroundSize="300% 300%";
-        genBtn.style.animation="h3-gradient 2.4s ease infinite";
-        genBtn.style.color=C.lime;
+        genBtn.style.background="linear-gradient(120deg,var(--h3accent),#e8d5c0)";
+        genBtn.style.backgroundSize="";
+        genBtn.style.animation="none";
+        genBtn.style.color="#141414";
         stopBtn.style.maxWidth="120px";stopBtn.style.minWidth="";stopBtn.style.width="";stopBtn.style.opacity="1";stopBtn.style.padding="0 14px";stopBtn.style.marginLeft="6px";
         progWrap.style.display="flex";setStage("Building workflow...",3);
         errorBox.style.display="none";

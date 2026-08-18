@@ -1,4 +1,4 @@
-export function attachOutputContextMenu(card, item, { isVideo, onExtend }) {
+export function attachOutputContextMenu(card, item, { isVideo, onExtend, onCopy }) {
   card.addEventListener("contextmenu", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -19,30 +19,34 @@ export function attachOutputContextMenu(card, item, { isVideo, onExtend }) {
       borderRadius: "7px",
       boxShadow: "0 5px 18px rgba(0,0,0,.55)",
     });
-    const action = document.createElement("button");
-    action.type = "button";
-    action.textContent = isVideo ? "Send to Extend" : "Only videos can be extended";
-    Object.assign(action.style, {
-      width: "100%",
-      border: "0",
-      borderRadius: "5px",
-      padding: "7px 9px",
-      background: "transparent",
-      color: isVideo ? "var(--h3-tx)" : "var(--h3-tx3)",
-      textAlign: "left",
-      font: "inherit",
-      fontSize: "10px",
-      cursor: isVideo ? "pointer" : "default",
-    });
-    if (isVideo) {
-      action.onmouseenter = () => { action.style.background = "var(--h3accent)"; action.style.color = "#141414"; };
-      action.onmouseleave = () => { action.style.background = "transparent"; action.style.color = "var(--h3-tx)"; };
-      action.onclick = async () => {
-        close();
-        await onExtend(item);
-      };
-    }
-    menu.appendChild(action);
+    const addAction = (label, enabled, callback) => {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.textContent = label;
+      Object.assign(action.style, {
+        width: "100%",
+        border: "0",
+        borderRadius: "5px",
+        padding: "7px 9px",
+        background: "transparent",
+        color: enabled ? "var(--h3-tx)" : "var(--h3-tx3)",
+        textAlign: "left",
+        font: "inherit",
+        fontSize: "10px",
+        cursor: enabled ? "pointer" : "default",
+      });
+      if (enabled) {
+        action.onmouseenter = () => { action.style.background = "var(--h3accent)"; action.style.color = "#141414"; };
+        action.onmouseleave = () => { action.style.background = "transparent"; action.style.color = "var(--h3-tx)"; };
+        action.onclick = async () => {
+          close();
+          await callback(item);
+        };
+      }
+      menu.appendChild(action);
+    };
+    if (isVideo && onCopy) addAction("Copy to input", true, onCopy);
+    addAction(isVideo ? "Send to Extend" : "Only videos can be extended", isVideo, onExtend);
     document.body.appendChild(menu);
     const close = () => {
       menu.remove();
