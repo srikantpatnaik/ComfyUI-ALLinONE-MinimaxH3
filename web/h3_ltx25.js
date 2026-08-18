@@ -1,6 +1,10 @@
 import { i2vCanvasSize, normalizeI2VAspect } from "./h3_i2v_aspect.js";
 
 const LTX25_RESOLUTIONS = [
+  "832x480 (480p)",
+  "480x832 (480p)",
+  "992x560 (560p)",
+  "560x992 (560p)",
   "1280x720",
   "720x1280",
   "1920x1080",
@@ -58,7 +62,7 @@ export function normalizeLtx25(saved = {}) {
 }
 
 function resolutionSize(value) {
-  const match = String(value || "").match(/^(\d+)x(\d+)$/i);
+  const match = String(value || "").match(/^(\d+)x(\d+)/i);
   if (!match) return {width: 1280, height: 720};
   return {width: Number(match[1]), height: Number(match[2])};
 }
