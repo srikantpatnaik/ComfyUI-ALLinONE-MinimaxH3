@@ -146,5 +146,5 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
     return true;
   };
 
-  return {controls:playerControls,sync,applySettings,resetZoom:()=>{zoom=1;applyZoom();},handleKey};
+  return {controls:playerControls,sync,applySettings,setLoop:value=>{vidEl.loop=!!value;save();sync();},resetZoom:()=>{zoom=1;applyZoom();},handleKey};
 }
