@@ -1186,7 +1186,7 @@ app.registerExtension({
 
       let _M={diffusion:[],text_encoders:[],vaes:[],loras:[]};
       const modelDDs={};
-      let ltxMainLoraDD=null;
+      let _renderLtxLoras=()=>{};
       const _mkModelRow=(key,label,items=[],onChange)=>{
         const w=mk("div",{marginBottom:"12px"});
         w.appendChild(cap(label));
@@ -1209,7 +1209,14 @@ app.registerExtension({
       const _mkLtxModelRow=(key,label,items=[S.ltx25[key]||""],onChange)=>{
         const w=mk("div",{marginBottom:"12px"});
         w.appendChild(cap(label));
-        const dd=DD(items,S.ltx25[key],v=>{S.ltx25[key]=v;persist();if(key==="lora") ltxMainLoraDD?.set(v);onChange&&onChange(v);});
+        const dd=DD(items,S.ltx25[key],v=>{
+          S.ltx25[key]=v;
+          if(key==="lora"){
+            S.ltx25.loras=[{name:v==="None"?"":v,strength:1}];
+            _renderLtxLoras();
+          }
+          persist();onChange&&onChange(v);
+        });
         w.appendChild(dd.el);
         modelDDs[`ltx_${key}`]=dd;
         return w;
@@ -2171,15 +2178,50 @@ app.registerExtension({
       const ltxLoraHdr=mk("div",{display:"flex",alignItems:"center",gap:"6px"});
       const ltxLoraTitle=mk("div",{fontSize:"9px",fontWeight:"700",letterSpacing:".1em",textTransform:"uppercase",color:C.muted});
       tx(ltxLoraTitle,"LTX-2.5 LoRA");
-      ltxLoraHdr.append(ltxLoraTitle,infoIcon("Select an LTX-2.5-compatible LoRA for the native LTX workflow. The available choices come from ComfyUI's LoRA folder."));
+      const ltxLoraSub=mk("div",{fontSize:"9px",color:C.muted,marginLeft:"auto",marginRight:"8px"});
+      const ltxLoraRowsWrap=mk("div",{display:"flex",flexDirection:"column",gap:"5px"});
+      const ltxAddLoraBtn=mk("button",{background:"transparent",border:`1px dashed rgba(var(--h3accent-rgb),.4)`,borderRadius:"6px",padding:"4px 12px",fontSize:"9px",fontWeight:"700",color:"rgba(var(--h3accent-rgb),.7)",cursor:"pointer",outline:"none",alignSelf:"flex-start"},{type:"button"});
+      tx(ltxAddLoraBtn,"+ Add LoRA");
+      const ltxLoraItems=()=>["None"].concat(_M.loras.length?_M.loras:S.ltx25.loras.map(lora=>lora.name).filter(Boolean));
+      const syncLtxLegacyLora=()=>{ S.ltx25.lora=S.ltx25.loras.find(lora=>lora&&lora.name)?.name||"None"; };
+      _renderLtxLoras=()=>{
+        ltxLoraRowsWrap.innerHTML="";
+        if(!Array.isArray(S.ltx25.loras)||!S.ltx25.loras.length) S.ltx25.loras=[{name:"",strength:1}];
+        S.ltx25.loras.forEach((lora,index)=>{
+          const row=mk("div",{display:"flex",alignItems:"center",gap:"6px"});
+          const dd=DD(ltxLoraItems(),lora.name||"None",value=>{
+            lora.name=value==="None"?"":value;
+            syncLtxLegacyLora();
+            persist();
+            modelDDs.ltx_lora?.set(S.ltx25.lora);
+            _renderLtxLoras();
+          });
+          const strength=NI("",lora.strength,-3,3,0.1,value=>{lora.strength=Math.round(value*100)/100;persist();},"52px");
+          const remove=mk("button",{flexShrink:"0"},{type:"button",className:"h3-rmbtn",title:"Remove this LoRA","aria-label":"Remove this LoRA"});
+          tx(remove,"x");
+          remove.onclick=()=>{
+            S.ltx25.loras.splice(index,1);
+            if(!S.ltx25.loras.length) S.ltx25.loras=[{name:"",strength:1}];
+            syncLtxLegacyLora();persist();_renderLtxLoras();
+          };
+          if(!lora.name&&S.ltx25.loras.length<=1) remove.style.display="none";
+          row.append(dd.el,strength,remove);
+          ltxLoraRowsWrap.appendChild(row);
+        });
+        ltxAddLoraBtn.style.display=S.ltx25.loras.length>=8?"none":"";
+        const count=S.ltx25.loras.filter(lora=>lora&&lora.name).length;
+        tx(ltxLoraSub,count?`LoRAs — ${count} loaded`:"LoRAs — none loaded");
+      };
+      ltxAddLoraBtn.onclick=()=>{
+        if(S.ltx25.loras.length>=8) return;
+        S.ltx25.loras.push({name:"",strength:1});
+        syncLtxLegacyLora();persist();_renderLtxLoras();
+      };
+      ltxLoraHdr.append(ltxLoraTitle,ltxLoraSub,infoIcon("Load up to eight LTX LoRAs with individual strengths, using the same multi-LoRA editor as H3."));
       const ltxLoraHint=mk("div",{fontSize:"8px",color:C.muted,lineHeight:"1.4"});
-      tx(ltxLoraHint,"Choose a loaded LTX-2.5 LoRA for this tab.");
-      ltxMainLoraDD=DD(["None",S.ltx25.lora||"None"],S.ltx25.lora||"None",value=>{
-        S.ltx25.lora=value==="None"?"None":value;
-        persist();
-        modelDDs.ltx_lora?.set(S.ltx25.lora);
-      });
-      ltxLoraArea.append(ltxLoraHdr,ltxLoraHint,ltxMainLoraDD.el);
+      tx(ltxLoraHint,"Choose one or more loaded LoRAs for this tab.");
+      ltxLoraArea.append(ltxLoraHdr,ltxLoraHint,ltxLoraRowsWrap,ltxAddLoraBtn);
+      _renderLtxLoras();
       if(S.firstFrame) firstSlot._restorePreview(S.firstFrame);
       if(S.lastFrame) lastSlot._restorePreview(S.lastFrame);
 
@@ -4397,7 +4439,8 @@ app.registerExtension({
           if(!has(_M.vaes,S.ltx25.videoVae)) S.ltx25.videoVae=_pickLtxModel(_M.vaes,["ltx-2.5","video-vae"])||S.ltx25.videoVae;
           if(!has(_M.vaes,S.ltx25.audioVae)) S.ltx25.audioVae=_pickLtxModel(_M.vaes,["ltx-2.5","audio-vae"])||S.ltx25.audioVae;
           if(!has(clipItems,S.ltx25.clip)) S.ltx25.clip=_pickLtxModel(clipItems,["ltx-2.5"])||S.ltx25.clip;
-          if(S.ltx25.lora!=="None"&&!has(_M.loras,S.ltx25.lora)) S.ltx25.lora=_pickLtxModel(_M.loras,["ltx","bb"])||"None";
+          if(!Array.isArray(S.ltx25.loras)||!S.ltx25.loras.length) S.ltx25.loras=[{name:"",strength:1}];
+          if(S.ltx25.lora!=="None"&&!S.ltx25.loras.some(lora=>lora.name===S.ltx25.lora)) S.ltx25.loras[0]={name:S.ltx25.lora,strength:1};
           persist();
           modelDDs.unetT2V.updateItems(_M.diffusion);
           modelDDs.unetR2V.updateItems(_M.diffusion);
@@ -4412,9 +4455,9 @@ app.registerExtension({
           modelDDs.ltx_unet.updateItems(ltxDiffusionItems.length?ltxDiffusionItems:[S.ltx25.unet]);
           modelDDs.ltx_videoVae.updateItems(ltxVideoVaeItems.length?ltxVideoVaeItems:[S.ltx25.videoVae]);
           modelDDs.ltx_audioVae.updateItems(ltxAudioVaeItems.length?ltxAudioVaeItems:[S.ltx25.audioVae]);
-          const ltxLoraItems=["None"].concat(_M.loras.filter(name=>/ltx[\\/]bb(?:\.safetensors)?$/i.test(name)));
+          const ltxLoraItems=["None"].concat(_M.loras);
           modelDDs.ltx_lora.updateItems(ltxLoraItems);
-          ltxMainLoraDD?.updateItems(ltxLoraItems);
+          _renderLtxLoras();
           const loraItems=_M.loras.length?_M.loras:["none"];
           _renderLoras();
           _checkTae();

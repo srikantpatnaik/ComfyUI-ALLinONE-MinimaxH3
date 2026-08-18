@@ -33,6 +33,7 @@ export const LTX25_DEFAULTS = {
   clip: "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
   upscaleModel: "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
   lora: "ltx/bb.safetensors",
+  loras: [{name: "ltx/bb.safetensors", strength: 1}],
 };
 
 const number = (value, fallback, min, max) => {
@@ -43,6 +44,16 @@ const number = (value, fallback, min, max) => {
 
 export function normalizeLtx25(saved = {}) {
   const state = {...LTX25_DEFAULTS, ...(saved.ltx25 || {})};
+  const savedLtx = saved.ltx25 || {};
+  const rawLoras = Array.isArray(savedLtx.loras)
+    ? savedLtx.loras
+    : [{name: savedLtx.lora !== undefined ? savedLtx.lora : state.lora, strength: 1}];
+  state.loras = rawLoras.map(lora => ({
+    name: typeof lora === "string" ? lora : String(lora?.name || ""),
+    strength: number(typeof lora === "string" ? 1 : lora?.strength, 1, -3, 3),
+  })).filter(lora => lora.name && lora.name !== "None");
+  if (!state.loras.length) state.loras = [{name: "", strength: 1}];
+  state.lora = state.loras.find(lora => lora.name)?.name || "None";
   if (!["t2v", "i2v", "r2v", "audio_drive", "keyframes", "extend", "chain", "image"].includes(state.mode)) state.mode = "i2v";
   if (!LTX25_RESOLUTIONS.includes(state.resolution)) state.resolution = LTX25_DEFAULTS.resolution;
   state.aspectRatio = normalizeI2VAspect(state.aspectRatio);
@@ -125,6 +136,22 @@ export function buildLtx25Workflow(state) {
     audio_decode: {class_type: "LTXVAudioVAEDecode", inputs: {samples: ref("separate", 1), audio_vae: ref("audio_vae")}, _meta: {title: "LTX Audio Decode"}},
     upscale_model: {class_type: "LatentUpscaleModelLoader", inputs: {model_name: state.upscaleModel}, _meta: {title: "LTX Latent Upscaler"}},
   };
+
+  const loras = state.loras.filter(lora => lora.name).slice(0, 8);
+  loras.slice(0, 3).forEach((lora, index) => {
+    const slot = index + 1;
+    graph.model_patch.inputs[`lora_name_${slot}`] = lora.name;
+    graph.model_patch.inputs[`strength_model_${slot}`] = lora.strength;
+    graph.model_patch.inputs[`strength_clip_${slot}`] = lora.strength;
+  });
+  let modelSource = ref("model_patch");
+  loras.slice(3).forEach((lora, index) => {
+    const id = `ltx_lora_${index + 4}`;
+    graph[id] = {class_type: "LoraLoaderModelOnly", inputs: {model: modelSource, lora_name: lora.name, strength_model: lora.strength}, _meta: {title: "LTX LoRA"}};
+    modelSource = ref(id);
+  });
+  graph.cache.inputs.model = modelSource;
+  graph.first_model.inputs.on_false = modelSource;
 
   let videoFrames = ref("decode");
   let outputFps = Number(state.fps);
