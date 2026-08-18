@@ -3279,16 +3279,18 @@ app.registerExtension({
             ? mk("img",{width:"100%",height:"54px",objectFit:"cover",display:"block",background:"#000",pointerEvents:"none"},{src:url})
             : mk("video",{width:"100%",height:"54px",objectFit:"cover",display:"block",background:"#000",pointerEvents:"none"},{muted:true,preload:"metadata"});
           if(!isImg) v.src=url;
-          const thumb=mk("div",{position:"relative",width:"100%",height:"54px"});
-          const star=mk("span",{position:"absolute",top:"3px",left:"3px",display:item.favorite?"flex":"none",alignItems:"center",justifyContent:"center",width:"18px",height:"18px",borderRadius:"5px",background:"rgba(0,0,0,.72)",color:C.lime,fontSize:"13px",lineHeight:"1",pointerEvents:"none"},{textContent:"★","aria-label":"Favorite"});
-          thumb.append(v,star);
           const historyItem=historyFor(item);
           const resolutionText=String(historyItem?.resolution||"");
-          const mpMatch=resolutionText.match(/([0-9]+(?:\.[0-9]+)?)\s*MP/i);
           const sizeMatch=resolutionText.match(/(\d+)x(\d+)/i);
-          const mp=mpMatch?mpMatch[1]:sizeMatch?((Number(sizeMatch[1])*Number(sizeMatch[2])/1000000).toFixed(1)):"—";
+          const dimensions=sizeMatch?`${sizeMatch[1]}x${sizeMatch[2]}`:"—";
+          const duration=historyItem?.duration?historyItem.duration+"s":"—";
+          const thumb=mk("div",{position:"relative",width:"100%",height:"54px"});
+          const star=mk("span",{position:"absolute",top:"3px",left:"3px",display:item.favorite?"flex":"none",alignItems:"center",justifyContent:"center",width:"18px",height:"18px",borderRadius:"5px",background:"rgba(0,0,0,.72)",color:C.lime,fontSize:"13px",lineHeight:"1",pointerEvents:"none"},{textContent:"★","aria-label":"Favorite"});
+          const thumbInfo=mk("span",{position:"absolute",right:"3px",bottom:"3px",maxWidth:"88px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",padding:"2px 4px",borderRadius:"4px",background:"rgba(0,0,0,.78)",color:"#fff",fontSize:"7px",lineHeight:"1.2",pointerEvents:"none",textAlign:"right"});
+          tx(thumbInfo,`${duration} · ${dimensions}`);
+          thumb.append(v,star,thumbInfo);
           const name=mk("div",{fontSize:"8px",color:item.favorite?C.lime:C.muted,padding:"3px 5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center",letterSpacing:".01em"});
-          tx(name,`H3 · ${compactTime(historyItem?.gen_time)} · ${historyItem?.duration?historyItem.duration+"s":"—"} · ${mp}MP`);
+          tx(name,`H3 · ${compactTime(historyItem?.gen_time)}`);
           if(item.favorite) name.style.color=C.lime;
           card.append(thumb,name);
           card.onclick=()=>_showVideo(item);
