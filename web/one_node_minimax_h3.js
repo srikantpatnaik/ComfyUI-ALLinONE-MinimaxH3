@@ -849,7 +849,7 @@ app.registerExtension({
           prompt:          saved.prompt!==undefined?saved.prompt:"",
           resolution:      saved.resolution!==undefined?saved.resolution:"960x544 (0.5MP Balanced)",
           duration:        saved.duration!==undefined?saved.duration:5,
-          temporalBatching: "auto",
+          temporalBatching: "off",
           steps:           (saved.steps&&saved.steps!==30)?saved.steps:20,
           quality:         (initialSol||initialCache||initialSage)?(migrateNativeDefaults?"balanced":"custom"):"native",
           optSol:          initialSol,
@@ -923,7 +923,7 @@ app.registerExtension({
         if(_updRecipeFn){ try{ _updRecipeFn(); }catch(e){} }
         saveState({
           mode:S.mode,prompt:S.prompt,resolution:S.resolution,duration:S.duration,
-          steps:S.steps,quality:S.quality,temporalBatching:"auto",settingsVersion:2,optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
+          steps:S.steps,quality:S.quality,temporalBatching:"off",settingsVersion:2,optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
           loras:S.loras,chainClips:S.chainClips.map(c=>({prompt:c.prompt,duration:c.duration})),
           firstFrame:S.firstFrame,lastFrame:S.lastFrame,firstFrameSize:S.firstFrameSize,lastFrameSize:S.lastFrameSize,
           i2vAspect:S.i2vAspect,
@@ -3146,7 +3146,7 @@ app.registerExtension({
           if(S.schedulerName) schedDD.set(S.schedulerName);
           S.quality=(S.optSol||S.optCache||S.optSage)?"custom":"native";
           _syncOptChips();
-          S.temporalBatching="auto";
+          S.temporalBatching="off";
           if(S.seed!==undefined) seedNI._inp.value=String(S.seed);
           if(S.batch!==undefined) batchNI._inp.value=String(S.batch);
           _updSeedUI();
