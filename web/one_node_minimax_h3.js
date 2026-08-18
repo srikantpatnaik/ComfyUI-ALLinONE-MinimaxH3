@@ -840,6 +840,7 @@ app.registerExtension({
       const self=this;
       self._h3Engine="h3";
       const saved=loadState();
+      self._h3Engine=saved.engine==="ltx25"?"ltx25":"h3";
       const hasSavedAccel=saved.quality!==undefined||saved.optSol!==undefined||saved.optCache!==undefined||saved.optSage!==undefined;
       const migrateNativeDefaults=!hasSavedAccel||(saved.settingsVersion===undefined&&saved.quality==="native"&&saved.optSol===false&&saved.optCache===false&&saved.optSage===false);
       if(!self._h3_S){
@@ -925,7 +926,7 @@ app.registerExtension({
         S.modeSettings[S.mode]={prompt:S.prompt,steps:S.steps,quality:S.quality,resolution:S.resolution,duration:S.duration,temporalBatching:S.temporalBatching,loras:JSON.parse(JSON.stringify(S.loras||[])),optSol:S.optSol,optCache:S.optCache,optSage:S.optSage};
         if(_updRecipeFn){ try{ _updRecipeFn(); }catch(e){} }
         saveState({
-          mode:S.mode,prompt:S.prompt,resolution:S.resolution,duration:S.duration,
+          engine:self._h3Engine,mode:S.mode,prompt:S.prompt,resolution:S.resolution,duration:S.duration,
           steps:S.steps,quality:S.quality,temporalBatching:"off",settingsVersion:2,optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
           loras:S.loras,chainClips:S.chainClips.map(c=>({prompt:c.prompt,duration:c.duration})),
           firstFrame:S.firstFrame,lastFrame:S.lastFrame,firstFrameSize:S.firstFrameSize,lastFrameSize:S.lastFrameSize,
@@ -1102,7 +1103,7 @@ app.registerExtension({
       const engineButton=(key,label)=>{
         const b=mk("button",{border:"none",borderRadius:"5px",padding:"4px 8px",fontSize:"8px",fontWeight:"700",cursor:"pointer",outline:"none",background:"transparent",color:C.muted},{type:"button",title:key==="h3"?"MiniMax H3":"LTX-2.5 Image to Video"});
         tx(b,label);
-        b.onclick=()=>{ self._h3Engine=key; _updateTabs(); _updateEngineSections(); };
+        b.onclick=()=>{ self._h3Engine=key; persist(); _updateTabs(); _updateEngineSections(); };
         engineEls[key]=b;engineTabs.appendChild(b);
       };
       engineButton("h3","H3");
