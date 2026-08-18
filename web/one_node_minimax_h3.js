@@ -2756,13 +2756,7 @@ app.registerExtension({
       const liveTxt=mk("span",{}, {className:"lctxt",textContent:"Live preview"});
       liveChip.append(liveDot,liveTxt);
       const _providerLabel=item=>item&&(item.engine==="ltx25"||item.mode==="ltx25-i2v"||/ltx25/i.test(item.filename||""))?"LTX2.5":"H3";
-      let _redirectVideoFullscreen=false;
       const _syncFullscreenOverlay=()=>{
-        if(document.fullscreenElement===vidEl&&!_redirectVideoFullscreen){
-          _redirectVideoFullscreen=true;
-          Promise.resolve(document.exitFullscreen()).then(()=>previewBox.requestFullscreen?.()).catch(()=>{}).finally(()=>{_redirectVideoFullscreen=false;});
-          return;
-        }
         const isPreviewFullscreen=!!document.fullscreenElement&&previewBox.contains(document.fullscreenElement);
         const isFullscreen=_inFullscreen||isPreviewFullscreen;
         if(isFullscreen) outputPlayer?.setLoop(true);

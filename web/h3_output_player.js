@@ -27,12 +27,13 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
   playerControls.append(playerPrevBtn,playerPlayBtn,playerNextBtn,playerMuteBtn,playerSpeedBtn,playerLoopBtn,playerAllLoopBtn,playerFullBtn,playerHelpBtn,playerModeLbl);
   previewBox.appendChild(playerHelp);
 
-  let muted=saved.muted!==false;
+  let muted=true;
   let globalLoop=saved.globalLoop===true;
   let zoom=1;
   const rates=[0.25,0.5,0.75,1,1.25,1.5,2];
   let rateIndex=Math.max(0,Math.min(rates.length-1,Number.isInteger(saved.rateIndex)?saved.rateIndex:rates.indexOf(1)));
   const applySettings=()=>{
+    muted=true;
     vidEl.muted=muted;
     vidEl.playbackRate=rates[rateIndex];
     vidEl.loop=saved.loop!==false;
