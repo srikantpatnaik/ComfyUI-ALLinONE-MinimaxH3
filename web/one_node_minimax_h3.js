@@ -1405,6 +1405,18 @@ app.registerExtension({
       const libFavOnly=mk("button",{background:"transparent",border:`1px solid ${C.border}`,borderRadius:"6px",padding:"4px 12px",fontSize:"11px",color:C.muted,cursor:"pointer",outline:"none",transition:"background .15s, color .15s"});
       tx(libFavOnly,"Favorites");
       libFavOnly.onclick=()=>{_libFavOnly=!_libFavOnly;libFavOnly.style.background=_libFavOnly?C.lime:"transparent";libFavOnly.style.borderColor=_libFavOnly?C.lime:C.border;libFavOnly.style.color=_libFavOnly?"#111":C.muted;_renderLibrary();};
+      const libSelectAll=mk("input",{width:"15px",height:"15px",margin:"0",accentColor:C.lime,cursor:"pointer"},{type:"checkbox","aria-label":"Select all library outputs"});
+      const libSelectAllLbl=mk("label",{display:"inline-flex",alignItems:"center",gap:"4px",fontSize:"10px",color:C.muted,cursor:"pointer"});
+      tx(libSelectAllLbl,"Select all");
+      libSelectAllLbl.prepend(libSelectAll);
+      const libDeleteSelected=mk("button",{background:"transparent",border:`1px solid rgba(220,80,80,.45)`,borderRadius:"6px",padding:"4px 9px",fontSize:"10px",color:"rgba(220,80,80,.9)",cursor:"pointer",outline:"none"});
+      tx(libDeleteSelected,"Delete selected");
+      const libDeleteNonFav=mk("button",{background:"transparent",border:`1px solid rgba(220,80,80,.45)`,borderRadius:"6px",padding:"4px 9px",fontSize:"10px",color:"rgba(220,80,80,.9)",cursor:"pointer",outline:"none"});
+      tx(libDeleteNonFav,"Delete non-favorites");
+      const libDeleteAll=mk("button",{background:"transparent",border:`1px solid rgba(220,80,80,.65)`,borderRadius:"6px",padding:"4px 9px",fontSize:"10px",fontWeight:"700",color:"#ff8080",cursor:"pointer",outline:"none"});
+      tx(libDeleteAll,"Delete all");
+      const libDownloadFav=mk("button",{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:"6px",padding:"4px 9px",fontSize:"10px",color:C.muted,cursor:"pointer",outline:"none"});
+      tx(libDownloadFav,"Download favorites ZIP");
       const libRefresh=mk("button",{background:"transparent",border:`1px solid ${C.border}`,borderRadius:"6px",padding:"4px 12px",fontSize:"11px",color:C.muted,cursor:"pointer",outline:"none"});
       tx(libRefresh,"Refresh");
       libRefresh.onmouseenter=()=>{libRefresh.style.borderColor=C.lime;libRefresh.style.color=C.lime;};
@@ -1413,7 +1425,7 @@ app.registerExtension({
       const libClose=mk("button",{background:"transparent",border:`1px solid #e05555`,borderRadius:"6px",padding:"4px 14px",fontSize:"11px",color:"#e05555",cursor:"pointer",outline:"none"});
       tx(libClose,"Close");
       libClose.onclick=()=>closeOverlayFade(libraryOverlay);
-      libActs.append(libFavOnly,libRefresh,libClose);
+      libActs.append(libFavOnly,libSelectAllLbl,libDeleteSelected,libDeleteNonFav,libDeleteAll,libDownloadFav,libRefresh,libClose);
       libHdr.append(libTitle,libActs);
       const libGrid=mk("div",{flex:"1",minHeight:"0",overflowY:"auto",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:"8px",alignContent:"start",scrollbarWidth:"thin",scrollbarColor:`${C.border} transparent`});
       libGrid.addEventListener("wheel",e=>e.stopPropagation(),{passive:true});
@@ -1486,6 +1498,68 @@ app.registerExtension({
       let _libFavOnly=false;
       let _libItems=[];
       let _libCur=null;
+      const _libSelected=new Set();
+      const _libKey=item=>`${item.subfolder||""}\u0000${item.filename}`;
+      const _libVisible=()=>_libItems.filter(item=>!_libFavOnly||item.favorite);
+      const _syncLibraryBulkControls=()=>{
+        const visible=_libVisible();
+        const allSelected=visible.length>0&&visible.every(item=>_libSelected.has(_libKey(item)));
+        libSelectAll.checked=allSelected;
+        libDeleteSelected.disabled=_libSelected.size===0;
+        libDeleteSelected.style.opacity=_libSelected.size===0?".45":"1";
+        libDeleteSelected.style.cursor=_libSelected.size===0?"default":"pointer";
+      };
+      const _deleteLibraryItems=async(mode)=>{
+        const selected=_libItems.filter(item=>_libSelected.has(_libKey(item)));
+        const count=mode==="selected"?selected.length:mode==="non_favorites"?_libItems.filter(item=>!item.favorite).length:_libItems.length;
+        if(!count){
+          showError(mode==="selected"?"Select at least one library item first.":"There are no matching library items.");
+          return;
+        }
+        const label=mode==="selected"?`${count} selected output${count===1?"":"s"}`:mode==="non_favorites"?"all non-favorite outputs":"all library outputs";
+        if(!confirm(`Delete ${label}? This cannot be undone.`)) return;
+        const payload={mode};
+        if(mode==="selected") payload.items=selected.map(item=>({filename:item.filename,subfolder:item.subfolder||""}));
+        try{
+          const r=await fetch("/h3one/delete_bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+          const d=await r.json();
+          if(!d.ok) throw new Error(d.error||"bulk delete failed");
+          _libSelected.clear();
+          if(_libCur&&!_libItems.some(item=>item.filename===_libCur.filename&&item.subfolder===_libCur.subfolder)){
+            lbVideo.pause();lbVideo.src="";lbImg.src="";libLightbox.style.display="none";_libCur=null;
+          }
+          await _renderLibrary();
+          _loadGallery();
+          if(d.errors&&d.errors.length) showError(`Deleted ${d.deleted} item${d.deleted===1?"":"s"}; ${d.errors.length} could not be deleted.`);
+        }catch(e){ showError("Could not delete library items: "+fmtErr(e)); }
+      };
+      libSelectAll.onchange=()=>{
+        const visible=_libVisible();
+        if(libSelectAll.checked) visible.forEach(item=>_libSelected.add(_libKey(item)));
+        else visible.forEach(item=>_libSelected.delete(_libKey(item)));
+        _renderLibrary();
+      };
+      libDeleteSelected.onclick=()=>_deleteLibraryItems("selected");
+      libDeleteNonFav.onclick=()=>_deleteLibraryItems("non_favorites");
+      libDeleteAll.onclick=()=>_deleteLibraryItems("all");
+      libDownloadFav.onclick=async()=>{
+        libDownloadFav.disabled=true;
+        tx(libDownloadFav,"Preparing ZIP...");
+        try{
+          const r=await fetch("/h3one/download_favorites");
+          if(!r.ok){
+            const d=await r.json().catch(()=>({}));
+            throw new Error(d.error||"No favorite outputs");
+          }
+          const blob=await r.blob();
+          const url=URL.createObjectURL(blob);
+          const link=document.createElement("a");
+          link.href=url;link.download="h3_favorites.zip";link.click();
+          setTimeout(()=>URL.revokeObjectURL(url),1000);
+        }catch(e){ showError("Could not download favorites: "+fmtErr(e)); }
+        libDownloadFav.disabled=false;
+        tx(libDownloadFav,"Download favorites ZIP");
+      };
       const _libUseIn=async(target)=>{
         if(!_libCur) return;
         if(target!=="R2V reference video"&&target!=="Extend source video") return;
@@ -1515,7 +1589,8 @@ app.registerExtension({
           const d=await r.json();
           _libItems=d.videos||[];
         }catch(e){ _libItems=[]; }
-        const vis=_libItems.filter(v=>!_libFavOnly||v.favorite);
+        const vis=_libVisible();
+        _syncLibraryBulkControls();
         if(!vis.length){
           const empty=mk("div",{fontSize:"11px",color:C.muted,padding:"20px 0",textAlign:"center",gridColumn:"1 / -1"});
           tx(empty,_libFavOnly?"No favorites yet. Favorite a video to collect it here.":"No videos yet. Generate something to see it here.");
@@ -1523,16 +1598,23 @@ app.registerExtension({
           return;
         }
         vis.forEach(item=>{
-          const card=mk("div",{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:"9px",overflow:"hidden",cursor:"pointer",display:"flex",flexDirection:"column",transition:"border-color .15s, background .15s"});
+          const card=mk("div",{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:"9px",overflow:"hidden",cursor:"pointer",display:"flex",flexDirection:"column",position:"relative",transition:"border-color .15s, background .15s"});
           const url=api.apiURL(`/view?filename=${encodeURIComponent(item.filename)}&type=output&subfolder=${encodeURIComponent(item.subfolder||"")}`);
           const isImg=item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"");
           const v=isImg
             ? mk("img",{width:"100%",height:"78px",objectFit:"cover",display:"block",background:"#000",pointerEvents:"none"},{src:url})
             : mk("video",{width:"100%",height:"78px",objectFit:"cover",display:"block",background:"#000",pointerEvents:"none"},{muted:true,preload:"metadata"});
           if(!isImg) v.src=url;
+          const thumb=mk("div",{position:"relative",width:"100%",height:"78px",flexShrink:"0"});
+          const star=mk("span",{position:"absolute",top:"5px",left:"5px",display:item.favorite?"flex":"none",alignItems:"center",justifyContent:"center",width:"22px",height:"22px",borderRadius:"6px",background:"rgba(0,0,0,.72)",color:C.lime,fontSize:"16px",lineHeight:"1",pointerEvents:"none"},{textContent:"★","aria-label":"Favorite"});
+          thumb.append(v,star);
+          const select=mk("input",{position:"absolute",top:"6px",right:"6px",width:"16px",height:"16px",margin:"0",accentColor:C.lime,cursor:"pointer",zIndex:"2"},{type:"checkbox","aria-label":`Select ${item.filename}`});
+          select.checked=_libSelected.has(_libKey(item));
+          select.onclick=e=>e.stopPropagation();
+          select.onchange=e=>{e.stopPropagation();if(select.checked)_libSelected.add(_libKey(item));else _libSelected.delete(_libKey(item));_syncLibraryBulkControls();};
           const name=mk("div",{fontSize:"8px",color:item.favorite?C.lime:C.muted,padding:"4px 6px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"});
           tx(name,(item.favorite?"★ ":"")+item.filename);
-          card.append(v,name);
+          card.append(thumb,select,name);
           card.onclick=()=>_libOpen(item);
           attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onCopy:_copyVideoToInput});
           card.onmouseenter=()=>card.style.borderColor=C.lime;
@@ -3152,10 +3234,13 @@ app.registerExtension({
             ? mk("img",{width:"100%",height:"54px",objectFit:"cover",display:"block",background:"#000",pointerEvents:"none"},{src:url})
             : mk("video",{width:"100%",height:"54px",objectFit:"cover",display:"block",background:"#000",pointerEvents:"none"},{muted:true,preload:"metadata"});
           if(!isImg) v.src=url;
+          const thumb=mk("div",{position:"relative",width:"100%",height:"54px"});
+          const star=mk("span",{position:"absolute",top:"3px",left:"3px",display:item.favorite?"flex":"none",alignItems:"center",justifyContent:"center",width:"18px",height:"18px",borderRadius:"5px",background:"rgba(0,0,0,.72)",color:C.lime,fontSize:"13px",lineHeight:"1",pointerEvents:"none"},{textContent:"★","aria-label":"Favorite"});
+          thumb.append(v,star);
           const name=mk("div",{fontSize:"8px",color:C.muted,padding:"3px 5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"});
-          tx(name,(item.favorite?"* ":"")+item.filename);
+          tx(name,(item.favorite?"★ ":"")+item.filename);
           if(item.favorite) name.style.color=C.lime;
-          card.append(v,name);
+          card.append(thumb,name);
           card.onclick=()=>_showVideo(item);
           attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onCopy:_copyVideoToInput});
           card.onmouseenter=()=>card.style.borderColor=C.lime;

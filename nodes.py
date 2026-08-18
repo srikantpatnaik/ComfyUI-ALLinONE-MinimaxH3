@@ -6,6 +6,8 @@ import uuid
 import shutil
 import subprocess
 import hashlib
+import tempfile
+import zipfile
 from pathlib import Path
 
 import folder_paths
@@ -726,8 +728,95 @@ async def delete_file(request):
         if not os.path.exists(vpath):
             return web.json_response({"ok": False, "error": "file not found"}, status=404)
         os.remove(vpath)
+        favs = _load_favorites()
+        if filename in favs:
+            favs.discard(filename)
+            _save_favorites(favs)
         return web.json_response({"ok": True})
     except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.post("/h3one/delete_bulk")
+async def delete_bulk(request):
+    try:
+        data = await request.json()
+        mode = str(data.get("mode", "selected"))
+        videos = _scan_output_videos()
+        favs = _load_favorites()
+        if mode == "all":
+            targets = videos
+        elif mode == "non_favorites":
+            targets = [item for item in videos if item["filename"] not in favs]
+        elif mode == "selected":
+            selected = data.get("items", [])
+            keys = {
+                (str(item.get("subfolder", "")), str(item.get("filename", "")))
+                for item in selected if isinstance(item, dict)
+            }
+            targets = [item for item in videos if (item["subfolder"], item["filename"]) in keys]
+        else:
+            return web.json_response({"ok": False, "error": "invalid delete mode"}, status=400)
+        deleted = 0
+        errors = []
+        for item in targets:
+            try:
+                path = _safe_join(_get_output_dir(), item["subfolder"], item["filename"])
+                if os.path.isfile(path):
+                    os.remove(path)
+                    deleted += 1
+                    favs.discard(item["filename"])
+            except Exception as e:
+                errors.append(f'{item["filename"]}: {e}')
+        _save_favorites(favs)
+        return web.json_response({"ok": True, "deleted": deleted, "errors": errors})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.get("/h3one/download_favorites")
+async def download_favorites(request):
+    archive_path = None
+    try:
+        favs = _load_favorites()
+        items = [item for item in _scan_output_videos() if item["filename"] in favs]
+        if not items:
+            return web.json_response({"ok": False, "error": "no favorite outputs"}, status=404)
+        fd, archive_path = tempfile.mkstemp(prefix="h3_favorites_", suffix=".zip")
+        os.close(fd)
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for item in items:
+                path = _safe_join(_get_output_dir(), item["subfolder"], item["filename"])
+                if not os.path.isfile(path):
+                    continue
+                subfolder = item["subfolder"].replace("\\", "/").strip("/")
+                if subfolder.startswith(SUBFOLDER + "/"):
+                    subfolder = subfolder[len(SUBFOLDER) + 1:]
+                archive_name = "/".join(part for part in (subfolder, item["filename"]) if part)
+                archive.write(path, archive_name)
+        response = web.StreamResponse(headers={
+            "Content-Type": "application/zip",
+            "Content-Disposition": 'attachment; filename="h3_favorites.zip"',
+        })
+        await response.prepare(request)
+        try:
+            with open(archive_path, "rb") as archive:
+                while True:
+                    chunk = archive.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    await response.write(chunk)
+            await response.write_eof()
+        finally:
+            os.remove(archive_path)
+            archive_path = None
+        return response
+    except Exception as e:
+        if archive_path:
+            try:
+                os.remove(archive_path)
+            except OSError:
+                pass
         return web.json_response({"ok": False, "error": str(e)}, status=500)
 
 
