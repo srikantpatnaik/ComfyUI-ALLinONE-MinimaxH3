@@ -750,7 +750,7 @@ const _finishRun=async()=>{
   const postRife=_activeNode?._h3_S?._temporalPostRife??null;
   const rifePostActive=_activeNode?._h3RifePostActive===true;
   if(postRife&&!rifePostActive) _activeNativeGenMs=_elapsed;
-  _activeShowTime?.(rifePostActive&&_activeNativeGenMs>0?_activeNativeGenMs:_elapsed);
+  _activeShowTime?.(rifePostActive&&_activeNativeGenMs>0?_activeNativeGenMs+_elapsed:_elapsed);
   if(postRife||rifePostActive){
     let wait=0;
     while((postRife&&!(_activeNode?._h3OutputItems||[]).length||rifePostActive&&!_activeShownFiles.length)&&wait<12){
@@ -1612,7 +1612,7 @@ app.registerExtension({
           tx(name,(item.favorite?"★ ":"")+item.filename);
           card.append(thumb,select,name);
           card.onclick=()=>_libOpen(item);
-          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onCopy:_copyVideoToInput,onRestore:_restoreSettingsFromVideo});
+          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onRestore:_restoreSettingsFromVideo});
           card.onmouseenter=()=>card.style.borderColor=C.lime;
           card.onmouseleave=()=>card.style.borderColor=C.border;
           libGrid.appendChild(card);
@@ -3103,16 +3103,6 @@ app.registerExtension({
         getItems:_playerItems,getCurrent:()=>_curItem,getMode:()=>_galleryFavOnly,showItem:_showVideo,
       });
       rightPanel.append(previewBox,outputPlayer.controls,timeBar,galleryWrap);
-      const _copyVideoToInput=async(item)=>{
-        if(!item||item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"")) return;
-        try{
-          const stage=await fetch("/h3one/stage_input",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:item.filename,subfolder:item.subfolder||""})});
-          const sd=await stage.json();
-          if(!sd.ok) throw new Error(sd.error||"Could not copy the video to the input folder");
-        }catch(e){
-          showError("Could not copy video to input: "+fmtErr(e));
-        }
-      };
       const _stageVideoForExtend=async(item,selectMode=true)=>{
         if(!item||item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"")) return;
         try{
@@ -3273,7 +3263,7 @@ app.registerExtension({
           if(item.favorite) name.style.color=C.lime;
           card.append(thumb,name);
           card.onclick=()=>_showVideo(item);
-          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onCopy:_copyVideoToInput,onRestore:_restoreSettingsFromVideo});
+          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onRestore:_restoreSettingsFromVideo});
           card.onmouseenter=()=>card.style.borderColor=C.lime;
           card.onmouseleave=()=>card.style.borderColor=C.border;
           galleryBox.appendChild(card);
@@ -3900,6 +3890,11 @@ app.registerExtension({
           wf["1"].inputs.file=sd.name;
           wf["3"].inputs.multiplier=settings.multiplier;
           wf["4"].inputs.fps=Number(settings.fps)*Number(settings.multiplier);
+          const cleanPart=(value)=>String(value||"").replace(/\\/g,"/").split("/").filter(part=>part&&part!=="."&&part!=="..").map(part=>part.replace(/[^a-zA-Z0-9._-]+/g,"_")).join("/");
+          const sourceStem=cleanPart(item.filename).replace(/\.[^.]+$/i,"")||"output";
+          const sourceFolder=cleanPart(item.subfolder);
+          const outputFolder=sourceFolder.startsWith("one-node-minimax-h3")?sourceFolder:`one-node-minimax-h3/${sourceFolder}`;
+          wf["5"].inputs.filename_prefix=`${outputFolder}/${sourceStem}`;
           const body={prompt:wf,client_id:api.clientId,extra_data:{enable_previews:true}};
           const res=await api.fetchApi("/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
           const data=await res.json();

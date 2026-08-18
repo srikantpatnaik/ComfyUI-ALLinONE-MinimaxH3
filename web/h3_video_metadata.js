@@ -59,7 +59,13 @@ export function embedH3VideoMetadata(item, payload) {
 export async function fetchH3RestoreMetadata(item) {
   const query = `filename=${encodeURIComponent(item.filename)}&subfolder=${encodeURIComponent(item.subfolder || "")}`;
   const response = await fetch(`/h3one/restore_metadata?${query}`);
-  const data = await response.json();
+  const body = await response.text();
+  let data;
+  try {
+    data = JSON.parse(body);
+  } catch (error) {
+    throw new Error(response.ok ? "Video has no H3 restore metadata" : `Restore metadata request failed (${response.status})`);
+  }
   if (!response.ok || !data.ok) throw new Error(data.error || "Video has no H3 restore metadata");
   return data;
 }
