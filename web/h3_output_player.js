@@ -1,4 +1,8 @@
 export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,getItems,getCurrent,showItem,getMode}){
+  const settingsKey="one_node_minimax_h3_output_player";
+  let saved={};
+  try{ saved=JSON.parse(localStorage.getItem(settingsKey)||"{}"); }catch(e){ saved={}; }
+  const save=()=>{ try{ localStorage.setItem(settingsKey,JSON.stringify({muted,rateIndex,loop:vidEl.loop,globalLoop})); }catch(e){} };
   const playerControls=mk("div",{display:"none",alignItems:"center",gap:"5px",flexWrap:"wrap",padding:"2px 0"});
   const playerBtn=(label,title)=>{
     const b=mk("button",{height:"26px",minWidth:"28px",padding:"0 8px",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:"4px",border:`1px solid ${C.border}`,borderRadius:"7px",background:C.bg1,color:C.muted,fontSize:"11px",fontWeight:"700",cursor:"pointer",outline:"none"},{type:"button",title});
@@ -23,10 +27,16 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
   playerControls.append(playerPrevBtn,playerPlayBtn,playerNextBtn,playerMuteBtn,playerSpeedBtn,playerLoopBtn,playerAllLoopBtn,playerFullBtn,playerHelpBtn,playerModeLbl);
   previewBox.appendChild(playerHelp);
 
-  let globalLoop=false;
+  let muted=saved.muted!==false;
+  let globalLoop=saved.globalLoop===true;
   let zoom=1;
   const rates=[0.25,0.5,0.75,1,1.25,1.5,2];
-  let rateIndex=rates.indexOf(1);
+  let rateIndex=Math.max(0,Math.min(rates.length-1,Number.isInteger(saved.rateIndex)?saved.rateIndex:rates.indexOf(1)));
+  const applySettings=()=>{
+    vidEl.muted=muted;
+    vidEl.playbackRate=rates[rateIndex];
+    vidEl.loop=saved.loop===true;
+  };
   const applyZoom=()=>{
     const transform=zoom===1?"":"scale("+zoom+")";
     vidEl.style.transform=transform;
@@ -68,19 +78,20 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
   playerPrevBtn.onclick=()=>cycle(-1);
   playerPlayBtn.onclick=()=>{ if(vidEl.paused) vidEl.play().catch(()=>{}); else vidEl.pause(); };
   playerNextBtn.onclick=()=>cycle(1);
-  playerMuteBtn.onclick=()=>{ vidEl.muted=!vidEl.muted; sync(); };
+  playerMuteBtn.onclick=()=>{ muted=!vidEl.muted; vidEl.muted=muted; save(); sync(); };
   playerSpeedBtn.onclick=()=>{
     rateIndex=(rateIndex+1)%rates.length;
     vidEl.playbackRate=rates[rateIndex];
+    save();
     sync();
   };
-  playerLoopBtn.onclick=()=>{ vidEl.loop=!vidEl.loop; sync(); };
-  playerAllLoopBtn.onclick=()=>{ globalLoop=!globalLoop; sync(); };
+  playerLoopBtn.onclick=()=>{ vidEl.loop=!vidEl.loop; save(); sync(); };
+  playerAllLoopBtn.onclick=()=>{ globalLoop=!globalLoop; save(); sync(); };
   playerFullBtn.onclick=toggleFullscreen;
   playerHelpBtn.onclick=toggleHelp;
   vidEl.addEventListener("play",sync);
   vidEl.addEventListener("pause",sync);
-  vidEl.addEventListener("volumechange",sync);
+  vidEl.addEventListener("volumechange",()=>{ muted=vidEl.muted;save();sync(); });
   vidEl.addEventListener("ratechange",sync);
   vidEl.addEventListener("ended",()=>{ if(globalLoop&&!vidEl.loop) cycle(1); });
 
@@ -96,26 +107,26 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
       vidEl.currentTime=Math.max(0,Math.min(vidEl.duration||Infinity,vidEl.currentTime+delta));
     }else if(key==="ArrowUp"||key==="ArrowDown"){
       e.preventDefault();
-      vidEl.muted=false;
+      muted=false;vidEl.muted=false;save();
       vidEl.volume=Math.max(0,Math.min(1,vidEl.volume+(key==="ArrowUp"?.1:-.1)));
     }else if(key==="n"||key==="N"){
       e.preventDefault();cycle(1);
     }else if(key==="b"||key==="B"){
       e.preventDefault();cycle(-1);
     }else if(key==="a"||key==="A"){
-      e.preventDefault();globalLoop=!globalLoop;sync();
+      e.preventDefault();globalLoop=!globalLoop;save();sync();
     }else if(key==="l"||key==="L"){
-      e.preventDefault();vidEl.loop=!vidEl.loop;sync();
+      e.preventDefault();vidEl.loop=!vidEl.loop;save();sync();
     }else if(key==="m"||key==="M"){
-      e.preventDefault();vidEl.muted=!vidEl.muted;sync();
+      e.preventDefault();muted=!vidEl.muted;vidEl.muted=muted;save();sync();
     }else if(key==="+"||key==="="){
       e.preventDefault();
       rateIndex=Math.min(rates.length-1,rateIndex+1);
-      vidEl.playbackRate=rates[rateIndex];sync();
+      vidEl.playbackRate=rates[rateIndex];save();sync();
     }else if(key==="-"){
       e.preventDefault();
       rateIndex=Math.max(0,rateIndex-1);
-      vidEl.playbackRate=rates[rateIndex];sync();
+      vidEl.playbackRate=rates[rateIndex];save();sync();
     }else if(key==="z"){
       e.preventDefault();zoom=Math.min(3,zoom+.25);applyZoom();
     }else if(key==="Z"){
@@ -135,5 +146,5 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
     return true;
   };
 
-  return {controls:playerControls,sync,resetZoom:()=>{zoom=1;applyZoom();},handleKey};
+  return {controls:playerControls,sync,applySettings,resetZoom:()=>{zoom=1;applyZoom();},handleKey};
 }

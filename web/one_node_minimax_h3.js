@@ -3083,20 +3083,19 @@ app.registerExtension({
         }
         vidEl.onloadedmetadata=()=>_updateResolutionChip(vidEl.videoWidth,vidEl.videoHeight);
         vidEl.src=url;vidEl.style.display="block";imgEl.style.display="none";
+        outputPlayer?.applySettings();
         placeholder.style.display="none";errorBox.style.display="none";
         _updateSeedChip(item.filename);
         if(_seedByFile[item.filename]===undefined) _showSeedFromHistory(item.filename);
         _updateTimeBar(item.filename);
         outputPlayer?.sync();
         if(fromFinish&&S.playOnFinish===false){
-          vidEl.muted=false;
           vidEl.load();
           vidEl.pause();
           const seek0=()=>{try{vidEl.currentTime=0;}catch(e){}};
           vidEl.addEventListener("loadedmetadata",seek0,{once:true});
           return;
         }
-        vidEl.muted=false;
         vidEl.play().catch(()=>{ vidEl.muted=true; vidEl.play().catch(()=>{}); });
       };
       outputPlayer=createH3OutputPlayer({
