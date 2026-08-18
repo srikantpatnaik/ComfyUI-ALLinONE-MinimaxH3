@@ -1,5 +1,5 @@
 function cloneSettings(state) {
-  return JSON.parse(JSON.stringify(state, (key, value) => key.startsWith("_") ? undefined : value));
+  return JSON.parse(JSON.stringify(state, (key, value) => key.startsWith("_") || key === "generating" ? undefined : value));
 }
 
 function referenceName(state) {

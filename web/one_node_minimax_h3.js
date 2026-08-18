@@ -3133,8 +3133,9 @@ app.registerExtension({
           if(!restored||typeof restored!=="object"||!Object.keys(restored).length) throw new Error("Video has no H3 restore settings");
           if(restored.mode&&restored.mode!==S.mode) _switchMode(restored.mode);
           Object.keys(restored).forEach(key=>{
-            if(!key.startsWith("_")&&key in S) S[key]=restored[key];
+            if(key!=="generating"&&!key.startsWith("_")&&key in S) S[key]=restored[key];
           });
+          S.generating=false;
           promptTA.value=S.prompt||"";
           _updChars();
           if(S.resolution){ resDD.set(S.resolution);_updResCustom(); }
