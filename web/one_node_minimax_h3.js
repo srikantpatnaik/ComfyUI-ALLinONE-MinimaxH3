@@ -3243,10 +3243,16 @@ app.registerExtension({
       };
       const _loadGallery=async()=>{
         galleryBox.innerHTML="";
+        let historyItems=[];
         try{
-          const r=await fetch("/h3one/gallery");
-          const d=await r.json();
+          const galleryResponse=await fetch("/h3one/gallery");
+          const d=await galleryResponse.json();
           _galItems=(d.videos||[]).filter(item=>!_rifeHiddenFiles.has(item.filename));
+          try{
+            const historyResponse=await fetch("/h3one/history");
+            const history=await historyResponse.json();
+            historyItems=Array.isArray(history.items)?history.items:[];
+          }catch(e){ }
           outputPlayer?.sync();
         }catch(e){ _galItems=[]; }
         const visible=_galItems.filter(item=>!_galleryFavOnly||item.favorite);
@@ -3255,6 +3261,16 @@ app.registerExtension({
           tx(empty,_galleryFavOnly?"No favorite outputs yet.":"No outputs yet.");
           galleryBox.appendChild(empty);return;
         }
+        const historyFor=(item)=>historyItems.find(it=>it.video===item.filename&&(it.subfolder||"")===(item.subfolder||""))||historyItems.find(it=>it.video===item.filename);
+        const compactTime=(ms)=>{
+          if(!(Number(ms)>0)) return "—";
+          const seconds=Math.round(Number(ms)/1000);
+          const minutes=Math.floor(seconds/60), remainder=seconds%60;
+          if(minutes<1) return `${remainder}s`;
+          const hours=Math.floor(minutes/60);
+          if(hours<1) return `${minutes}m${String(remainder).padStart(2,"0")}s`;
+          return `${hours}h${String(minutes%60).padStart(2,"0")}m${String(remainder).padStart(2,"0")}s`;
+        };
         visible.forEach(item=>{
           const card=mk("div",{width:"96px",flexShrink:"0",cursor:"pointer",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:"7px",overflow:"hidden"});
           const url=api.apiURL(`/view?filename=${encodeURIComponent(item.filename)}&type=output&subfolder=${encodeURIComponent(item.subfolder||"")}`);
@@ -3266,8 +3282,13 @@ app.registerExtension({
           const thumb=mk("div",{position:"relative",width:"100%",height:"54px"});
           const star=mk("span",{position:"absolute",top:"3px",left:"3px",display:item.favorite?"flex":"none",alignItems:"center",justifyContent:"center",width:"18px",height:"18px",borderRadius:"5px",background:"rgba(0,0,0,.72)",color:C.lime,fontSize:"13px",lineHeight:"1",pointerEvents:"none"},{textContent:"★","aria-label":"Favorite"});
           thumb.append(v,star);
-          const name=mk("div",{fontSize:"8px",color:C.muted,padding:"3px 5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"});
-          tx(name,(item.favorite?"★ ":"")+item.filename);
+          const historyItem=historyFor(item);
+          const resolutionText=String(historyItem?.resolution||"");
+          const mpMatch=resolutionText.match(/([0-9]+(?:\.[0-9]+)?)\s*MP/i);
+          const sizeMatch=resolutionText.match(/(\d+)x(\d+)/i);
+          const mp=mpMatch?mpMatch[1]:sizeMatch?((Number(sizeMatch[1])*Number(sizeMatch[2])/1000000).toFixed(1)):"—";
+          const name=mk("div",{fontSize:"8px",color:item.favorite?C.lime:C.muted,padding:"3px 5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center",letterSpacing:".01em"});
+          tx(name,`H3 · ${compactTime(historyItem?.gen_time)} · ${historyItem?.duration?historyItem.duration+"s":"—"} · ${mp}MP`);
           if(item.favorite) name.style.color=C.lime;
           card.append(thumb,name);
           card.onclick=()=>_showVideo(item);
