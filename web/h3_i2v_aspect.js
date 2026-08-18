@@ -37,5 +37,6 @@ export function createI2VAspectControl({ S, mk, tx, infoIcon, DD, persist, onCha
     onChange();
   });
   row.append(capRow, dropdown.el);
+  row.setValue = value => dropdown.set(value === "original" ? "Original" : value);
   return row;
 }

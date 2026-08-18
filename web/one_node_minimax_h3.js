@@ -5,6 +5,7 @@ import { openComfyGalleryPicker } from "./h3_media_picker.js";
 import { h3TextEncoderItems } from "./h3_model_features.js";
 import { buildRifePostprocessWorkflow, createOutputControls, normalizeOutputSettings, outputFrameLabel, patchOutputVideo } from "./h3_output_features.js";
 import { attachOutputContextMenu } from "./h3_output_context.js";
+import { createH3RestoreMetadata, embedH3VideoMetadata, fetchH3RestoreMetadata } from "./h3_video_metadata.js";
 
 const ACCENT_DEFAULT = "#c0a996";
 const SUPPORT_URL = "https://ko-fi.com/leonq8";
@@ -745,20 +746,30 @@ const _finishRun=async()=>{
   _activeSetStage?.("Done",100);
   const _elapsed=Date.now()-_activeGenStartTs;
   _activeShowTime?.(_elapsed);
+  const postRife=_activeNode?._h3_S?._temporalPostRife??null;
+  const rifePostActive=_activeNode?._h3RifePostActive===true;
+  if(postRife||rifePostActive){
+    let wait=0;
+    while((postRife&&!(_activeNode?._h3OutputItems||[]).length||rifePostActive&&!_activeShownFiles.length)&&wait<12){
+      await new Promise(res=>setTimeout(res,250));
+      wait++;
+    }
+  }
   let tries=0;
-  while(tries<12&&!_activeShownFiles.length){
+  while(!postRife&&!rifePostActive&&tries<12&&!_activeShownFiles.length){
     await _activeShowLatest?.();
     if(_activeShownFiles.length) break;
     tries++;
     await new Promise(res=>setTimeout(res,1500));
   }
-  const postRife=_activeNode?._h3_S?._temporalPostRife??null;
   const nativeItems=_activeNode?._h3OutputItems||[];
   if(postRife&&nativeItems.length&&_activeNode?._h3PostprocessRife){
+    _activeNode._h3TemporalNativeItems=nativeItems.slice();
     _activeNode._h3_S._temporalPostRife=null;
     try{
       const postIds=await _activeNode._h3PostprocessRife(nativeItems,postRife);
       if(postIds.length){
+        _activeNode._h3RifePostActive=true;
         _activeShownFiles=[];
         _activeNode._h3OutputItems=[];
         _batchIds=postIds;
@@ -774,6 +785,14 @@ const _finishRun=async()=>{
       _activeResetBtn?.();
       return;
     }
+  }
+  const temporalNative=_activeNode?._h3TemporalNativeItems||[];
+  for(const item of temporalNative){
+    fetch("/h3one/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:item.filename,subfolder:item.subfolder||""})}).catch(()=>{});
+  }
+  if(_activeNode){
+    delete _activeNode._h3TemporalNativeItems;
+    _activeNode._h3RifePostActive=false;
   }
   _activeResetBtn?.();
   const S=_activeNode?._h3_S;
@@ -1616,7 +1635,7 @@ app.registerExtension({
           tx(name,(item.favorite?"★ ":"")+item.filename);
           card.append(thumb,select,name);
           card.onclick=()=>_libOpen(item);
-          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onCopy:_copyVideoToInput});
+          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onCopy:_copyVideoToInput,onRestore:_restoreSettingsFromVideo});
           card.onmouseenter=()=>card.style.borderColor=C.lime;
           card.onmouseleave=()=>card.style.borderColor=C.border;
           libGrid.appendChild(card);
@@ -2453,7 +2472,7 @@ app.registerExtension({
       const framesLbl=mk("div",{fontSize:"9px",color:C.muted,flexShrink:"0"});
       durInner.append(durNI,framesLbl);
       durRow.append(durCap,durInner);
-      const {fpsRow,rifeRow}=createOutputControls({S,mk,tx,infoIcon,NI,DD,persist,updateFramesLabel:()=>_updateFramesLabel()});
+      const {fpsRow,rifeRow,fpsNI,rifeDD}=createOutputControls({S,mk,tx,infoIcon,NI,DD,persist,updateFramesLabel:()=>_updateFramesLabel()});
       const temporalRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
       const temporalCapRow=mk("div",{display:"flex",alignItems:"center",gap:"4px"});
       const temporalCap=mk("div",{fontSize:"10px",color:C.text});tx(temporalCap,"Temporal batches");
@@ -3173,6 +3192,66 @@ app.registerExtension({
           showError("Could not send video to Extend: "+fmtErr(e));
         }
       };
+      const _restoreSettingsFromVideo=async(item)=>{
+        try{
+          const data=await fetchH3RestoreMetadata(item);
+          const payload=data.settings||{};
+          const restored=payload.settings||{};
+          if(!restored||typeof restored!=="object"||!Object.keys(restored).length) throw new Error("Video has no H3 restore settings");
+          if(restored.mode&&restored.mode!==S.mode) _switchMode(restored.mode);
+          Object.keys(restored).forEach(key=>{
+            if(!key.startsWith("_")&&key in S) S[key]=restored[key];
+          });
+          promptTA.value=S.prompt||"";
+          _updChars();
+          if(S.resolution){ resDD.set(S.resolution);_updResCustom(); }
+          if(S.duration!==undefined){ durNI._inp.value=String(S.duration); }
+          if(S.fps!==undefined){ fpsNI.setVal(S.fps); }
+          if(S.rifeMultiplier!==undefined){ rifeDD.set(`${S.rifeMultiplier}x${S.rifeMultiplier===1?" (off)":""}`); }
+          if(S.steps!==undefined) stepsNI._inp.value=String(S.steps);
+          if(S.quality){
+            qualDD.set(_QL[S.quality]||"Custom");
+            _syncOptChips();
+          }
+          if(S.samplerName) samplerDD.set(S.samplerName);
+          if(S.schedulerName) schedDD.set(S.schedulerName);
+          if(S.temporalBatching){
+            temporalDD.set({off:"Off",auto:"Auto (RAM offload, resolution-aware)",auto90:"Manual 90-frame chunks",auto124:"Manual 124-frame chunks"}[S.temporalBatching]||"Auto (RAM offload, resolution-aware)");
+          }
+          if(S.seed!==undefined) seedNI._inp.value=String(S.seed);
+          if(S.batch!==undefined) batchNI._inp.value=String(S.batch);
+          _updSeedUI();
+          if(Array.isArray(S.loras)){ S.loras=S.loras.filter(item=>item&&item.name).concat([{name:"",strength:1}]);_renderLoras(); }
+          if(Array.isArray(S.refImages)) _renderRefs();
+          if(Array.isArray(S.kf)) _renderKf();
+          if(Array.isArray(S.imgRefs)) _renderImgRefs();
+          i2vAspectRow.setValue(S.i2vAspect||"original");
+          _updateTabs();
+          _updateModeSections();
+          _syncImgAdvRef?.();
+          _updateFramesLabel();
+          persist();
+
+          if(data.reference_image){
+            const imageBlob=await (await fetch(data.reference_image)).blob();
+            const imageFile=new File([imageBlob],payload.reference_image_name||"h3-restored-reference.png",{type:imageBlob.type||"image/png"});
+            if(S.mode==="i2v"){
+              if(S.firstFrame) firstSlot.loadFile(imageFile);
+              else lastSlot.loadFile(imageFile);
+            }else if(S.mode==="r2v"||S.mode==="audio_drive"){
+              const fd=new FormData();fd.append("image",imageFile);fd.append("overwrite","true");
+              const upload=await api.fetchApi("/upload/image",{method:"POST",body:fd});
+              const result=await upload.json();
+              if(result.name){ S.refImages=[result.name];_renderRefs();persist(); }
+            }
+          }else if(S.mode==="i2v"){
+            if(S.firstFrame) firstSlot._restorePreview(S.firstFrame);
+            if(S.lastFrame) lastSlot._restorePreview(S.lastFrame);
+          }
+        }catch(e){
+          showError("Could not restore video settings: "+fmtErr(e));
+        }
+      };
       const _favCurrent=async()=>{
         if(!_curItem) return;
         const nf=!_curItem.favorite;
@@ -3262,7 +3341,7 @@ app.registerExtension({
           if(item.favorite) name.style.color=C.lime;
           card.append(thumb,name);
           card.onclick=()=>_showVideo(item);
-          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onCopy:_copyVideoToInput});
+          attachOutputContextMenu(card,item,{isVideo:!isImg,onExtend:_stageVideoForExtend,onCopy:_copyVideoToInput,onRestore:_restoreSettingsFromVideo});
           card.onmouseenter=()=>card.style.borderColor=C.lime;
           card.onmouseleave=()=>card.style.borderColor=C.border;
           galleryBox.appendChild(card);
@@ -3291,6 +3370,7 @@ app.registerExtension({
 
       const resetBtn=()=>{
         S.generating=false;
+        self._h3RifePostActive=false;
         _batchIds=[];_batchDone=0;
         _stopFinishWatch();
         _upscaleRun="";
@@ -3314,14 +3394,17 @@ app.registerExtension({
         errorBox.append(title,body);
         vidEl.style.display="none";imgEl.style.display="none";placeholder.style.display="none";
       };
-      const showOutput=(item)=>{
+      const showOutput=(item,promptId)=>{
         errorBox.style.display="none";
         self._h3OutputItems=self._h3OutputItems||[];
         self._h3OutputItems.push(item);
+        const deferNativeRife=(!!S._temporalPostRife||self._h3RifePostActive===true)&&String(item.subfolder||"").includes("temporal-batches");
+        if(deferNativeRife) return;
         if(S.seed!==undefined&&S.seed!==null&&S.seed!=="") _seedByFile[item.filename]=S.seed;
         const genMs=Date.now()-_activeGenStartTs;
         _genTimeByFile[item.filename]=genMs;
         const wasUpscale=_upscaleRun;
+        const restoreMetadata=self._h3MetadataByPrompt?.[promptId]||self._h3RestoreMetadata;
         if(_upscaleRun&&_upOrig){
           _upResult={filename:item.filename,subfolder:item.subfolder||""};
         }
@@ -3334,6 +3417,7 @@ app.registerExtension({
         const isTemp=item.type==="temp";
         if(!wasUpscale&&!isTemp&&S.mode==="extend") _stageVideoForExtend(item,false);
         if(!isTemp){
+          embedH3VideoMetadata(item,restoreMetadata);
           fetch("/h3one/set_output",{method:"POST",headers:{"Content-Type":"application/json"},
             body:JSON.stringify({node_id:self.id,info:{filename:item.filename,subfolder:item.subfolder||""}})}).catch(()=>{});
           const histMode=wasUpscale?("Upscale "+S.upscaleFactor+"x ("+(wasUpscale==="upscale-rtx"?"RTX VSR":"SeedVR2")+")"):S.mode;
@@ -3935,6 +4019,10 @@ app.registerExtension({
           const res=await api.fetchApi("/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
           const data=await res.json();
           if(data.error||!data.prompt_id) throw new Error(data.error?.message||JSON.stringify(data.error)||"Could not queue RIFE post-processing");
+          if(self._h3RestoreMetadata){
+            self._h3MetadataByPrompt=self._h3MetadataByPrompt||{};
+            self._h3MetadataByPrompt[data.prompt_id]=self._h3RestoreMetadata;
+          }
           ids.push(data.prompt_id);
         }
         return ids;
@@ -4150,6 +4238,8 @@ app.registerExtension({
         _activeGenStartTs=Date.now();
         showTime(0);
         _activePromptId=null;
+        self._h3MetadataByPrompt={};
+        self._h3RestoreMetadata=null;
         S.generating=true;
         genBtn.disabled=true;tx(genBtnLbl,"Generating...");
         genBtn.style.background="linear-gradient(180deg,#292929,#151515)";
@@ -4168,6 +4258,7 @@ app.registerExtension({
           return;
         }
         try{
+          const restoreBase=await createH3RestoreMetadata(S,api);
           const n=Math.max(1,Math.min(4,S.batch||1));
           const ids=[];
           for(let i=0;i<n;i++){
@@ -4181,6 +4272,9 @@ app.registerExtension({
             if(data.error||!data.prompt_id){
               throw new Error(data.error?.message||JSON.stringify(data.error)||"Unknown error");
             }
+            const restoreMetadata={...restoreBase,settings:{...restoreBase.settings,seed:S.seed}};
+            self._h3RestoreMetadata=restoreMetadata;
+            self._h3MetadataByPrompt[data.prompt_id]=restoreMetadata;
             ids.push(data.prompt_id);
           }
           _batchIds=ids;
@@ -4451,14 +4545,14 @@ app.registerExtension({
     if(!out) return;
     const vids=out.videos||out.gifs||null;
     if(vids&&Array.isArray(vids)&&vids.length&&_activeShowOutput){
-      _activeShowOutput(vids[vids.length-1]);
+      _activeShowOutput(vids[vids.length-1],d.prompt_id);
       _activeSetStage?.("Done",97);
     }
     const imgs=out.images||null;
     if(imgs&&Array.isArray(imgs)&&imgs.length&&_activeShowOutput){
       const im=imgs[imgs.length-1];
       const animated=!!(out.animated&&out.animated.length);
-      _activeShowOutput({filename:im.filename,subfolder:im.subfolder||"",type:im.type||"output",kind:animated?"video":"image"});
+      _activeShowOutput({filename:im.filename,subfolder:im.subfolder||"",type:im.type||"output",kind:animated?"video":"image"},d.prompt_id);
       _activeSetStage?.("Done",97);
     }
   });

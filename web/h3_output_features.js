@@ -37,7 +37,7 @@ export function createOutputControls({ S, mk, tx, infoIcon, NI, DD, persist, upd
   });
   rifeRow.append(rifeCapRow, rifeDD.el);
 
-  return { fpsRow, rifeRow };
+  return { fpsRow, rifeRow, fpsNI, rifeDD };
 }
 
 export function patchOutputVideo(workflow, fps, rifeMultiplier) {

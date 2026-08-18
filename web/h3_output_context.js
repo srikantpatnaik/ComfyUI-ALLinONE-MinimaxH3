@@ -1,4 +1,4 @@
-export function attachOutputContextMenu(card, item, { isVideo, onExtend, onCopy }) {
+export function attachOutputContextMenu(card, item, { isVideo, onExtend, onCopy, onRestore }) {
   card.addEventListener("contextmenu", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -46,6 +46,7 @@ export function attachOutputContextMenu(card, item, { isVideo, onExtend, onCopy 
       menu.appendChild(action);
     };
     if (isVideo && onCopy) addAction("Copy to input", true, onCopy);
+    if (isVideo && onRestore) addAction("Use restore settings", true, onRestore);
     addAction(isVideo ? "Send to Extend" : "Only videos can be extended", isVideo, onExtend);
     document.body.appendChild(menu);
     const close = () => {

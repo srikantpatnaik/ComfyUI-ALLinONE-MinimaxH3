@@ -18,6 +18,8 @@ from server import PromptServer
 from .h3_i2v_aspect import MiniMaxH3I2VAspectFit
 from .h3_motion_compat import native_motion_context_status
 from .h3_preserve_extension import MiniMaxH3PreserveExtension
+from .h3_video_metadata import embed as embed_video_metadata
+from .h3_video_metadata import read as read_video_metadata
 
 NODE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(NODE_DIR, "config.json")
@@ -676,6 +678,39 @@ async def stage_input(request):
         dest_name = f"h3_src_{uuid.uuid4().hex[:10]}{ext}"
         shutil.copy2(src, os.path.join(str(input_dir), dest_name))
         return web.json_response({"ok": True, "name": dest_name})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.post("/h3one/embed_metadata")
+async def embed_metadata(request):
+    try:
+        data = await request.json()
+        filename = data.get("filename", "")
+        subfolder = data.get("subfolder", "")
+        settings = data.get("settings")
+        if not filename or not isinstance(settings, dict):
+            return web.json_response({"ok": False, "error": "filename and settings are required"}, status=400)
+        path = _safe_join(_get_output_dir(), subfolder, filename)
+        if not os.path.isfile(path):
+            return web.json_response({"ok": False, "error": "not found"}, status=404)
+        embed_video_metadata(path, settings, data.get("reference_image") or None)
+        return web.json_response({"ok": True})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.get("/h3one/restore_metadata")
+async def restore_metadata(request):
+    try:
+        filename = request.query.get("filename", "")
+        subfolder = request.query.get("subfolder", "")
+        if not filename:
+            return web.json_response({"ok": False, "error": "filename is required"}, status=400)
+        path = _safe_join(_get_output_dir(), subfolder, filename)
+        if not os.path.isfile(path):
+            return web.json_response({"ok": False, "error": "not found"}, status=404)
+        return web.json_response({"ok": True, **read_video_metadata(path)})
     except Exception as e:
         return web.json_response({"ok": False, "error": str(e)}, status=500)
 
