@@ -42,8 +42,8 @@ class MiniMaxH3I2VAspectFit:
                 source.movedim(-1, 1), resized_width, resized_height, "lanczos", "disabled"
             ).movedim(1, -1)
 
-        canvas = torch.full(
-            (source.shape[0], height, width, 3), 0.5, dtype=source.dtype, device=source.device
+        canvas = torch.zeros(
+            (source.shape[0], height, width, 3), dtype=source.dtype, device=source.device
         )
         left = (width - resized_width) // 2
         top = (height - resized_height) // 2
