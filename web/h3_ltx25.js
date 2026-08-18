@@ -1,3 +1,5 @@
+import { i2vCanvasSize, normalizeI2VAspect } from "./h3_i2v_aspect.js";
+
 const LTX25_RESOLUTIONS = [
   "1280x720",
   "720x1280",
@@ -10,6 +12,9 @@ const LTX25_RESOLUTIONS = [
 export const LTX25_DEFAULTS = {
   prompt: "",
   firstFrame: null,
+  sourceSize: null,
+  aspectRatio: "16:9",
+  mode: "i2v",
   resolution: "1280x720",
   duration: 5,
   fps: 24,
@@ -34,7 +39,14 @@ const number = (value, fallback, min, max) => {
 
 export function normalizeLtx25(saved = {}) {
   const state = {...LTX25_DEFAULTS, ...(saved.ltx25 || {})};
+  if (!["t2v", "i2v", "r2v", "audio_drive", "keyframes", "extend", "chain", "image"].includes(state.mode)) state.mode = "i2v";
   if (!LTX25_RESOLUTIONS.includes(state.resolution)) state.resolution = LTX25_DEFAULTS.resolution;
+  state.aspectRatio = normalizeI2VAspect(state.aspectRatio);
+  if (!state.aspectRatio || (!Object.prototype.hasOwnProperty.call(saved.ltx25 || {}, "aspectRatio") && state.aspectRatio === "original")) {
+    const {width, height} = resolutionSize(state.resolution);
+    state.aspectRatio = width >= height ? "16:9" : "9:16";
+  }
+  if (!state.sourceSize || !(state.sourceSize.width > 0 && state.sourceSize.height > 0)) state.sourceSize = null;
   state.duration = Math.round(number(state.duration, 5, 1, 20) * 2) / 2;
   state.fps = Math.round(number(state.fps, 24, 1, 60));
   state.seed = Math.round(number(state.seed, 0, 0, 0xFFFFFFFF));
@@ -51,12 +63,22 @@ function resolutionSize(value) {
   return {width: Number(match[1]), height: Number(match[2])};
 }
 
+function resolutionAspect(value) {
+  const {width, height} = resolutionSize(value);
+  return width >= height ? "16:9" : "9:16";
+}
+
 function ref(node, output = 0) {
   return [node, output];
 }
 
 export function buildLtx25Workflow(state) {
-  const {width, height} = resolutionSize(state.resolution);
+  const baseSize = resolutionSize(state.resolution);
+  const sourceSize = state.sourceSize || {};
+  const canvas = normalizeI2VAspect(state.aspectRatio) === "original" && sourceSize.width > 0 && sourceSize.height > 0
+    ? i2vCanvasSize(baseSize.width, baseSize.height, "original", sourceSize.width, sourceSize.height)
+    : baseSize;
+  const {width, height} = canvas;
   const frames = Math.max(1, Math.round(Number(state.duration) * Number(state.fps)) + 1);
   const latentWidth = Math.max(32, Math.floor(width / 2));
   const latentHeight = Math.max(32, Math.floor(height / 2));
@@ -119,17 +141,43 @@ export function createLtx25Panel({S, mk, tx, NI, DD, ImgSlot, infoIcon, persist,
   tx(title, "LTX-2.5 Image to Video");
   const hint = mk("div", {fontSize: "9px", color: "var(--h3-tx2)", lineHeight: "1.45"});
   tx(hint, "Native local LTX-2.5 I2V workflow with two-pass latent refinement and optional RIFE.");
+  const modeNote = mk("div", {display:"none", fontSize:"9px", color:"var(--h3-warn)", lineHeight:"1.45", padding:"7px 8px", border:"1px solid rgba(255,194,102,.35)", borderRadius:"7px", background:"rgba(255,194,102,.08)"});
   const prompt = mk("textarea", {background:"var(--h3-bg2)", border:"1px solid var(--h3-line2)", borderRadius:"7px", color:"var(--h3-tx)", fontSize:"11px", padding:"7px 8px", minHeight:"70px", resize:"vertical", outline:"none", fontFamily:"inherit", lineHeight:"1.45", boxSizing:"border-box", width:"100%"}, {placeholder:"Describe the motion..."});
   prompt.value = S.ltx25.prompt || "";
   prompt.oninput = () => { S.ltx25.prompt = prompt.value; persist(); };
   const sourceLabel = mk("div", {fontSize:"9px", fontWeight:"700", color:"var(--h3-tx2)", textTransform:"uppercase", letterSpacing:".07em"});
   tx(sourceLabel, "First frame");
-  const source = ImgSlot(false, name => { S.ltx25.firstFrame = name; persist(); });
+  const source = ImgSlot(false, name => { S.ltx25.firstFrame = name; if (!name) S.ltx25.sourceSize = null; persist(); }, (width, height) => {
+    S.ltx25.sourceSize = width && height ? {width, height} : null;
+    persist();
+  });
   if (S.ltx25.firstFrame) source._restorePreview(S.ltx25.firstFrame);
   const sourceRow = mk("div", {display:"flex", alignItems:"center", gap:"8px"});
   sourceRow.append(source.el, mk("div", {fontSize:"8px", color:"var(--h3-tx2)", lineHeight:"1.4", maxWidth:"180px"}, {textContent:"Required. Choose from the ComfyUI gallery or your PC."}));
 
-  const resolution = DD(LTX25_RESOLUTIONS, S.ltx25.resolution, value => { S.ltx25.resolution = value; persist(); });
+  const resolution = DD(LTX25_RESOLUTIONS, S.ltx25.resolution, value => {
+    S.ltx25.resolution = value;
+    if (S.ltx25.aspectRatio !== "original") {
+      S.ltx25.aspectRatio = resolutionAspect(value);
+      aspect.set(S.ltx25.aspectRatio);
+    }
+    persist();
+  });
+  const aspect = DD(["Original", "16:9", "9:16"], S.ltx25.aspectRatio === "original" ? "Original" : S.ltx25.aspectRatio, value => {
+    S.ltx25.aspectRatio = value === "Original" ? "original" : value;
+    if (S.ltx25.aspectRatio !== "original") {
+      const candidates = LTX25_RESOLUTIONS.filter(item => resolutionAspect(item) === S.ltx25.aspectRatio);
+      const current = resolutionSize(S.ltx25.resolution);
+      const area = current.width * current.height;
+      S.ltx25.resolution = candidates.reduce((best, item) => {
+        if (!best) return item;
+        const bestSize = resolutionSize(best);
+        return Math.abs(Math.log((resolutionSize(item).width * resolutionSize(item).height) / area)) < Math.abs(Math.log((bestSize.width * bestSize.height) / area)) ? item : best;
+      }, "");
+      resolution.set(S.ltx25.resolution);
+    }
+    persist();
+  });
   const duration = NI("", S.ltx25.duration, 1, 20, 0.5, value => { S.ltx25.duration = Math.round(value * 2) / 2; persist(); }, "72px");
   const fps = NI("", S.ltx25.fps, 1, 60, 1, value => { S.ltx25.fps = Math.round(value); persist(); }, "60px");
   const rife = DD(["1x (off)", "2x", "4x"], `${S.ltx25.rifeMultiplier}x${S.ltx25.rifeMultiplier === 1 ? " (off)" : ""}`, value => { S.ltx25.rifeMultiplier = parseInt(value, 10) || 1; persist(); });
@@ -142,7 +190,7 @@ export function createLtx25Panel({S, mk, tx, NI, DD, ImgSlot, infoIcon, persist,
     return row;
   };
   const tune = mk("div", {display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px"});
-  tune.append(field("Resolution", resolution), field("Duration (s)", duration), field("FPS", fps), field("RIFE", rife), field("Seed", seed));
+  tune.append(field("Aspect ratio", aspect), field("Resolution", resolution), field("Duration (s)", duration), field("FPS", fps), field("RIFE", rife), field("Seed", seed));
   const checkRow = mk("div", {display:"flex", gap:"12px", flexWrap:"wrap", gridColumn:"1 / -1"});
   const checkbox = (label, key) => {
     const wrap = mk("label", {display:"inline-flex", alignItems:"center", gap:"5px", fontSize:"9px", color:"var(--h3-tx2)", cursor:"pointer"});
@@ -153,6 +201,18 @@ export function createLtx25Panel({S, mk, tx, NI, DD, ImgSlot, infoIcon, persist,
   };
   checkRow.append(checkbox("Generate audio", "enableAudio"), checkbox("EasyCache", "enableCache"));
   tune.appendChild(checkRow);
-  panel.append(title, hint, prompt, sourceLabel, sourceRow, tune);
-  return {el: panel, source, prompt, refresh(){ prompt.value = S.ltx25.prompt || ""; }};
+  const setMode = mode => {
+    const supported = mode === "i2v";
+    tx(title, supported ? "LTX-2.5 Image to Video" : `LTX-2.5 ${mode.toUpperCase()}`);
+    tx(hint, supported ? "Native local LTX-2.5 I2V workflow with two-pass latent refinement and optional RIFE." : "The LTX provider keeps the same H3 mode buttons. This mode is not wired to a local LTX-2.5 workflow yet; select I2V to generate.");
+    if (supported) {
+      modeNote.style.display = "none";
+    } else {
+      tx(modeNote, "LTX-2.5 currently has the native image-to-video path enabled. The other provider modes are shown for a consistent layout and will not submit an H3 workflow by mistake.");
+      modeNote.style.display = "block";
+    }
+  };
+  panel.append(title, hint, modeNote, prompt, sourceLabel, sourceRow, tune);
+  setMode(S.ltx25.mode);
+  return {el: panel, source, prompt, setMode, refresh(){ prompt.value = S.ltx25.prompt || ""; }};
 }

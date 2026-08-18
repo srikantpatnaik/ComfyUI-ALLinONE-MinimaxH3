@@ -1083,7 +1083,7 @@ app.registerExtension({
       const closeOverlayFade=(el)=>{ el.style.opacity="0";el.style.transform="translateY(6px)";setTimeout(()=>el.style.display="none",220); };
 
       // -- NAV ROW: compact mode chips + actions ------------------------------
-      const topRight=mk("div",{display:"flex",gap:"4px",alignItems:"center",flexShrink:"0"});
+      const topRight=mk("div",{display:"flex",gap:"4px",alignItems:"center",flexShrink:"0",marginLeft:"auto"});
       const MODE_ICONS={
         t2v:'<path d="M4 6h16M4 12h10M4 18h14"/>',
         i2v:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M6 17l4-4 3 3 2-2 3 3"/>',
@@ -1096,23 +1096,25 @@ app.registerExtension({
       };
       const MODE_SHORT={t2v:"T2V",i2v:"I2V",r2v:"R2V",audio_drive:"Audio",keyframes:"Keys",extend:"Extend",chain:"Chain",image:"Image"};
       let _updateEngineSections=()=>{};
+      let _updateLtxModeSections=()=>{};
       const engineTabs=mk("div",{display:"flex",gap:"3px",alignItems:"center",flexShrink:"0",padding:"2px",border:`1px solid ${C.border}`,borderRadius:"7px",background:C.bg1});
       const engineEls={};
       const engineButton=(key,label)=>{
         const b=mk("button",{border:"none",borderRadius:"5px",padding:"4px 8px",fontSize:"8px",fontWeight:"700",cursor:"pointer",outline:"none",background:"transparent",color:C.muted},{type:"button",title:key==="h3"?"MiniMax H3":"LTX-2.5 Image to Video"});
         tx(b,label);
-        b.onclick=()=>{ if(self._h3_S?.generating) return; self._h3Engine=key; _updateEngineSections(); };
+        b.onclick=()=>{ self._h3Engine=key; _updateTabs(); _updateEngineSections(); };
         engineEls[key]=b;engineTabs.appendChild(b);
       };
       engineButton("h3","H3");
       engineButton("ltx25","LTX 2.5");
       const modesWrap=mk("div",{}, {className:"h3-modes"});
       const modeEls={};
+      const activeMode=()=>self._h3Engine==="ltx25"?(S.ltx25.mode||"i2v"):S.mode;
       const _updateTabs=()=>{
         MODES.forEach(m=>{
           const el=modeEls[m.key];
           if(!el) return;
-          el.classList.toggle("on",S.mode===m.key);
+          el.classList.toggle("on",activeMode()===m.key);
         });
       };
       MODES.forEach(m=>{
@@ -1120,7 +1122,16 @@ app.registerExtension({
         b.innerHTML=`<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MODE_ICONS[m.key]}</svg>`;
         b.appendChild(mk("span",{}, {textContent:MODE_SHORT[m.key]||m.label}));
         attachTip(b,MODE_HINTS[m.key]||"");
-        b.onclick=()=>{ _switchMode(m.key); };
+        b.onclick=()=>{
+          if(self._h3Engine==="ltx25"){
+            S.ltx25.mode=m.key;
+            persist();
+            _updateTabs();
+            _updateLtxModeSections();
+          }else{
+            _switchMode(m.key);
+          }
+        };
         modeEls[m.key]=b;modesWrap.appendChild(b);
       });
       const navRow=mk("div",{}, {className:"h3-nav"});
@@ -2131,6 +2142,7 @@ app.registerExtension({
       i2vArea.append(i2vSlots,i2vAspectRow);
       const ltx25UI=createLtx25Panel({S,mk,tx,NI,DD,ImgSlot,infoIcon,persist,seedMax:H3_SEED_MAX});
       const ltx25Area=ltx25UI.el;
+      _updateLtxModeSections=()=>ltx25UI.setMode(S.ltx25.mode||"i2v");
       if(S.firstFrame) firstSlot._restorePreview(S.firstFrame);
       if(S.lastFrame) lastSlot._restorePreview(S.lastFrame);
 
@@ -3325,7 +3337,8 @@ app.registerExtension({
           const dimensions=sizeMatch?`${sizeMatch[1]}x${sizeMatch[2]}`:"—";
           const duration=historyItem?.duration?historyItem.duration+"s":"—";
           const thumb=mk("div",{position:"relative",width:"100%",height:"54px"});
-          const h3Badge=mk("span",{position:"absolute",top:"3px",left:"3px",padding:"2px 4px",borderRadius:"4px",background:"rgba(0,0,0,.78)",color:"#fff",fontSize:"7px",fontWeight:"700",lineHeight:"1.2",letterSpacing:".03em",pointerEvents:"none"},{textContent:"H3"});
+          const engineBadge=historyItem?.mode==="ltx25-i2v"?"LTX2.5":"H3";
+          const h3Badge=mk("span",{position:"absolute",top:"3px",left:"3px",padding:"2px 4px",borderRadius:"4px",background:"rgba(0,0,0,.78)",color:"#fff",fontSize:"7px",fontWeight:"700",lineHeight:"1.2",letterSpacing:".03em",pointerEvents:"none"},{textContent:engineBadge});
           const star=mk("span",{position:"absolute",top:"3px",right:"3px",display:item.favorite?"flex":"none",alignItems:"center",justifyContent:"center",width:"18px",height:"18px",borderRadius:"5px",background:"rgba(0,0,0,.72)",color:C.lime,fontSize:"13px",lineHeight:"1",pointerEvents:"none"},{textContent:"★","aria-label":"Favorite"});
           const thumbInfo=mk("span",{position:"absolute",right:"3px",bottom:"3px",maxWidth:"88px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",padding:"2px 4px",borderRadius:"4px",background:"rgba(0,0,0,.78)",color:"#fff",fontSize:"7px",lineHeight:"1.2",pointerEvents:"none",textAlign:"right"});
           tx(thumbInfo,dimensions);
@@ -3389,41 +3402,47 @@ app.registerExtension({
         vidEl.style.display="none";imgEl.style.display="none";placeholder.style.display="none";
       };
       const showOutput=(item,promptId)=>{
-        errorBox.style.display="none";
-        self._h3OutputItems=self._h3OutputItems||[];
-        self._h3OutputItems.push(item);
-        const isLtx=self._h3Engine==="ltx25";
-        const deferNativeRife=!!S._temporalPostRife&&!self._h3RifePostActive;
+        const job=self._h3PromptJobs?.[promptId];
+        const activeRun=!job||job.run===self._h3ActiveRun;
+        const settings=job?.settings||{};
+        const isLtx=job?job.engine==="ltx25":(self._h3ActiveRun?.engine==="ltx25"||self._h3Engine==="ltx25");
+        if(activeRun) errorBox.style.display="none";
+        if(activeRun){
+          self._h3OutputItems=self._h3OutputItems||[];
+          self._h3OutputItems.push(item);
+        }
+        const deferNativeRife=activeRun&&!!S._temporalPostRife&&!self._h3RifePostActive;
         if(deferNativeRife){
           _rifeHiddenFiles.add(item.filename);
           return;
         }
-        const activeSeed=isLtx?S.ltx25.seed:S.seed;
+        const activeSeed=settings.seed!==undefined?settings.seed:(isLtx?S.ltx25.seed:S.seed);
         if(activeSeed!==undefined&&activeSeed!==null&&activeSeed!=="") _seedByFile[item.filename]=activeSeed;
-        const genMs=self._h3RifePostActive===true&&_activeNativeGenMs>0?_activeNativeGenMs:Date.now()-_activeGenStartTs;
+        const genStart=job?.startTs||_activeGenStartTs;
+        const genMs=activeRun&&self._h3RifePostActive===true&&_activeNativeGenMs>0?_activeNativeGenMs:Date.now()-genStart;
         _genTimeByFile[item.filename]=genMs;
-        const wasUpscale=_upscaleRun;
-        const restoreMetadata=self._h3MetadataByPrompt?.[promptId]||self._h3RestoreMetadata;
-        if(_upscaleRun&&_upOrig){
+        const wasUpscale=activeRun&&_upscaleRun;
+        const restoreMetadata=job?.restoreMetadata||self._h3MetadataByPrompt?.[promptId]||(activeRun?self._h3RestoreMetadata:null);
+        if(wasUpscale&&_upOrig){
           _upResult={filename:item.filename,subfolder:item.subfolder||""};
         }
-        _showVideo(item,true);
-        if(_upResult&&_upResult.filename===item.filename){
+        if(activeRun) _showVideo(item,true);
+        if(activeRun&&_upResult&&_upResult.filename===item.filename){
           cmpBtn.style.display="block";
         }
-        _upscaleRun="";
-        _activeShownFiles.push(item.filename);
+        if(activeRun) _upscaleRun="";
+        if(activeRun) _activeShownFiles.push(item.filename);
         const isTemp=item.type==="temp";
-        if(!wasUpscale&&!isTemp&&!isLtx&&S.mode==="extend") _stageVideoForExtend(item,false);
+        if(activeRun&&!wasUpscale&&!isTemp&&!isLtx&&S.mode==="extend") _stageVideoForExtend(item,false);
         if(!isTemp){
           if(restoreMetadata) embedH3VideoMetadata(item,restoreMetadata);
           fetch("/h3one/set_output",{method:"POST",headers:{"Content-Type":"application/json"},
             body:JSON.stringify({node_id:self.id,info:{filename:item.filename,subfolder:item.subfolder||""}})}).catch(()=>{});
-          const histMode=wasUpscale?("Upscale "+S.upscaleFactor+"x ("+(wasUpscale==="upscale-rtx"?"RTX VSR":"SeedVR2")+")"):isLtx?"ltx25-i2v":S.mode;
-          const histRes=wasUpscale?(S.upscaleFactor+"x upscale"):isLtx?S.ltx25.resolution:(S.mode==="image"?(S.imgLastW+"x"+S.imgLastH):S.resolution);
-          const histPrompt=(isLtx?S.ltx25.prompt:S.prompt)||"";
-          const histDuration=wasUpscale?0:isLtx?S.ltx25.duration:S.duration;
-          const histSeed=isLtx?S.ltx25.seed:S.seed;
+          const histMode=wasUpscale?("Upscale "+S.upscaleFactor+"x ("+(wasUpscale==="upscale-rtx"?"RTX VSR":"SeedVR2")+")"):isLtx?"ltx25-i2v":settings.mode||S.mode;
+          const histRes=wasUpscale?(S.upscaleFactor+"x upscale"):isLtx?settings.resolution||S.ltx25.resolution:(settings.mode==="image"?(S.imgLastW+"x"+S.imgLastH):settings.resolution||S.resolution);
+          const histPrompt=(settings.prompt!==undefined?settings.prompt:(isLtx?S.ltx25.prompt:S.prompt))||"";
+          const histDuration=wasUpscale?0:isLtx?(settings.duration??S.ltx25.duration):(settings.duration??S.duration);
+          const histSeed=settings.seed!==undefined?settings.seed:(isLtx?S.ltx25.seed:S.seed);
            fetch("/h3one/history",{method:"POST",headers:{"Content-Type":"application/json"},
              body:JSON.stringify({
                mode:histMode,quality:wasUpscale?"":isLtx?"native":S.quality,prompt:histPrompt.slice(0,2000),duration:histDuration,
@@ -3957,6 +3976,7 @@ app.registerExtension({
         return wf;
       };
       const _buildLtx25=async()=>{
+        if(S.ltx25.mode!=="i2v") throw new Error("This LTX-2.5 mode is not available yet. Select I2V in the LTX 2.5 mode buttons.");
         if(!S.ltx25.firstFrame) throw new Error("LTX-2.5 I2V needs a first-frame image. Add one in the LTX 2.5 tab.");
         if(!(S.ltx25.prompt||"").trim()) throw new Error("LTX-2.5 I2V needs a motion prompt.");
         return buildLtx25Workflow(S.ltx25);
@@ -4146,8 +4166,8 @@ app.registerExtension({
       };
 
       genBtn.onclick=async()=>{
-        if(S.generating) return;
         const isLtx=self._h3Engine==="ltx25";
+        const run={engine:isLtx?"ltx25":"h3",startTs:Date.now(),promptIds:[],showOutput};
         _upOrig=null;_upResult=null;
         delete S._temporalPostRife;
         self._h3OutputItems=[];
@@ -4164,12 +4184,14 @@ app.registerExtension({
         _activeShowTime=showTime;
         _activeShowLatest=showLatest;
         _activeShownFiles=[];
-        _activeGenStartTs=Date.now();
+        _activeGenStartTs=run.startTs;
         _activeNativeGenMs=0;
         _rifeHiddenFiles.clear();
         showTime(0);
         _activePromptId=null;
-        self._h3MetadataByPrompt={};
+        self._h3PromptJobs=self._h3PromptJobs||{};
+        self._h3ActiveRun=run;
+        self._h3MetadataByPrompt=self._h3MetadataByPrompt||{};
         self._h3RestoreMetadata=null;
         S.generating=true;
         genBtn.disabled=true;tx(genBtnLbl,"Generating...");
@@ -4203,17 +4225,29 @@ app.registerExtension({
             if(data.error||!data.prompt_id){
               throw new Error(data.error?.message||JSON.stringify(data.error)||"Unknown error");
             }
+            const job={run,engine:run.engine,startTs:run.startTs,settings:{
+              mode:isLtx?"ltx25-i2v":S.mode,
+              prompt:isLtx?S.ltx25.prompt:S.prompt,
+              duration:isLtx?S.ltx25.duration:S.duration,
+              resolution:isLtx?S.ltx25.resolution:S.resolution,
+              seed:isLtx?S.ltx25.seed:S.seed,
+            }};
             if(restoreBase){
               const restoreMetadata={...restoreBase,settings:{...restoreBase.settings,seed:S.seed}};
               self._h3RestoreMetadata=restoreMetadata;
               self._h3MetadataByPrompt[data.prompt_id]=restoreMetadata;
+              job.restoreMetadata=restoreMetadata;
             }
+            self._h3PromptJobs[data.prompt_id]=job;
+            run.promptIds.push(data.prompt_id);
             ids.push(data.prompt_id);
           }
           _batchIds=ids;
           _batchDone=0;
           _activePromptId=ids[ids.length-1];
           _armFinishWatch();
+          genBtn.disabled=false;
+          tx(genBtnLbl,"Queue next");
           setStage(n>1?`Queued ${n} runs...`:"In queue...",6);
         }catch(e){
           delete S._generationRes;
@@ -4339,7 +4373,7 @@ app.registerExtension({
           el.style.background=active?C.lime:"transparent";
           el.style.color=active?"#111":C.muted;
         });
-        modesWrap.style.display=isH3?"":"none";
+        modesWrap.style.display="";
         ltx25Area.style.display=isH3?"none":"flex";
         loraArea.style.display=isH3?"":"none";
         tuneCard.style.display=isH3?"":"none";
@@ -4348,6 +4382,7 @@ app.registerExtension({
         }else{
           promptCard.style.display="none";
           modeCard.style.display="none";
+          _updateLtxModeSections();
         }
       };
       const _updRecipe=()=>{
@@ -4514,31 +4549,40 @@ app.registerExtension({
   api.addEventListener("executed",(evt)=>{
     if(!_activeNode) return;
     const d=evt.detail;
-    if(!d||!_batchIds.includes(d.prompt_id)) return;
+    const job=d&&_activeNode._h3PromptJobs?.[d.prompt_id];
+    if(!job) return;
     const out=d.output;
     if(!out) return;
     const vids=out.videos||out.gifs||null;
-    if(vids&&Array.isArray(vids)&&vids.length&&_activeShowOutput){
-      _activeShowOutput(vids[vids.length-1],d.prompt_id);
-      _activeSetStage?.("Done",97);
+    if(vids&&Array.isArray(vids)&&vids.length){
+      job.run.showOutput?.(vids[vids.length-1],d.prompt_id);
+      if(job.run===_activeNode._h3ActiveRun) _activeSetStage?.("Done",97);
     }
     const imgs=out.images||null;
-    if(imgs&&Array.isArray(imgs)&&imgs.length&&_activeShowOutput){
+    if(imgs&&Array.isArray(imgs)&&imgs.length){
       const im=imgs[imgs.length-1];
       const animated=!!(out.animated&&out.animated.length);
-      _activeShowOutput({filename:im.filename,subfolder:im.subfolder||"",type:im.type||"output",kind:animated?"video":"image"},d.prompt_id);
-      _activeSetStage?.("Done",97);
+      job.run.showOutput?.({filename:im.filename,subfolder:im.subfolder||"",type:im.type||"output",kind:animated?"video":"image"},d.prompt_id);
+      if(job.run===_activeNode._h3ActiveRun) _activeSetStage?.("Done",97);
     }
   });
 
-  api.addEventListener("execution_success",()=>{
+  api.addEventListener("execution_success",(evt)=>{
+    const promptId=evt.detail?.prompt_id;
+    if(promptId){
+      const job=_activeNode?._h3PromptJobs?.[promptId];
+      if(!job||job.run!==_activeNode._h3ActiveRun) return;
+    }
     _finishRun();
   });
 
   api.addEventListener("execution_error",(evt)=>{
     if(!_activeNode) return;
     const d=evt.detail;
-    if(d?.prompt_id&&_batchIds.length&&!_batchIds.includes(d.prompt_id)) return;
+    if(d?.prompt_id){
+      const job=_activeNode._h3PromptJobs?.[d.prompt_id];
+      if(!job||job.run!==_activeNode._h3ActiveRun) return;
+    }
     const msg=fmtErr(d?.exception_message||d?.error||d||"Execution failed.");
     _activeShowError?.(msg);
     _activeResetBtn?.();
