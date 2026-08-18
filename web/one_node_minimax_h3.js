@@ -3,7 +3,7 @@ import { api } from "../../scripts/api.js";
 import { createI2VAspectControl, i2vCanvasSize, normalizeI2VAspect } from "./h3_i2v_aspect.js";
 import { openComfyGalleryPicker } from "./h3_media_picker.js";
 import { h3TextEncoderItems } from "./h3_model_features.js";
-import { createOutputControls, normalizeOutputSettings, outputFrameLabel, patchOutputVideo } from "./h3_output_features.js";
+import { buildRifePostprocessWorkflow, createOutputControls, normalizeOutputSettings, outputFrameLabel, patchOutputVideo } from "./h3_output_features.js";
 import { attachOutputContextMenu } from "./h3_output_context.js";
 
 const ACCENT_DEFAULT = "#c0a996";
@@ -3252,7 +3252,7 @@ app.registerExtension({
       // -- GENERATE ROW ------------------------------------------------------
       const genRow=mk("div",{display:"flex",gap:"0",alignItems:"stretch",width:"100%",boxSizing:"border-box"});
       const genBtn=mk("button",{
-        background:"linear-gradient(120deg,var(--h3accent),#e8d5c0)",color:"#141414",border:"none",borderRadius:"10px",
+        background:"linear-gradient(180deg,#292929,#151515)",color:"#f2f2f2",border:"1px solid #424242",borderRadius:"10px",
         padding:"0",height:"42px",fontSize:"13px",fontWeight:"800",
         cursor:"pointer",flex:"1",letterSpacing:".06em",
         display:"flex",alignItems:"center",justifyContent:"center",gap:"9px",
@@ -3278,8 +3278,8 @@ app.registerExtension({
         _showLiveChip(false);
         genBtn.disabled=false;
         tx(genBtnLbl,"Generate");
-        genBtn.style.background="linear-gradient(120deg,var(--h3accent),#e8d5c0)";genBtn.style.backgroundSize="";
-        genBtn.style.animation="none";genBtn.style.color="#141414";
+        genBtn.style.background="linear-gradient(180deg,#292929,#151515)";genBtn.style.backgroundSize="";
+        genBtn.style.animation="none";genBtn.style.color="#f2f2f2";
         stopBtn.style.maxWidth="0";stopBtn.style.minWidth="0";stopBtn.style.width="0";stopBtn.style.opacity="0";stopBtn.style.padding="0";stopBtn.style.marginLeft="0";
         progWrap.style.display="none";progFill.style.width="0%";
       };
@@ -3379,7 +3379,10 @@ app.registerExtension({
       // -- WORKFLOW BUILDERS -------------------------------------------------
       const _fetchTpl=async(name)=>{
         const res=await fetch(`/h3one/workflow/${name}`);
-        if(!res.ok) throw new Error("Failed to load workflow template: "+name);
+        if(!res.ok){
+          if(name==="rife_postprocess.json"&&res.status===404) return buildRifePostprocessWorkflow();
+          throw new Error("Failed to load workflow template: "+name);
+        }
         return await res.json();
       };
       const _loadNativeHighResNodes=async()=>{
@@ -4129,10 +4132,10 @@ app.registerExtension({
         _activePromptId=null;
         S.generating=true;
         genBtn.disabled=true;tx(genBtnLbl,"Generating...");
-        genBtn.style.background="linear-gradient(120deg,var(--h3accent),#e8d5c0)";
+        genBtn.style.background="linear-gradient(180deg,#292929,#151515)";
         genBtn.style.backgroundSize="";
         genBtn.style.animation="none";
-        genBtn.style.color="#141414";
+        genBtn.style.color="#f2f2f2";
         stopBtn.style.maxWidth="120px";stopBtn.style.minWidth="";stopBtn.style.width="";stopBtn.style.opacity="1";stopBtn.style.padding="0 14px";stopBtn.style.marginLeft="6px";
         progWrap.style.display="flex";setStage("Building workflow...",3);
         errorBox.style.display="none";
