@@ -4,6 +4,7 @@ import { createI2VAspectControl, i2vCanvasSize, normalizeI2VAspect } from "./h3_
 import { openComfyGalleryPicker } from "./h3_media_picker.js";
 import { h3TextEncoderItems } from "./h3_model_features.js";
 import { buildRifePostprocessWorkflow, createOutputControls, normalizeOutputSettings, patchOutputVideo } from "./h3_output_features.js";
+import { createH3OutputPlayer } from "./h3_output_player.js";
 import { attachOutputContextMenu } from "./h3_output_context.js";
 import { createH3RestoreMetadata, embedH3VideoMetadata, fetchH3RestoreMetadata } from "./h3_video_metadata.js";
 
@@ -699,6 +700,7 @@ let _activeSetStage=null;
 let _activePromptId=null;
 let _activeShowTime=null;
 let _activeGenStartTs=0;
+let _activeNativeGenMs=0;
 let _activeShowLatest=null;
 let _activeShownFiles=[];
 let _batchIds=[];
@@ -745,9 +747,10 @@ const _finishRun=async()=>{
   _stopFinishWatch();
   _activeSetStage?.("Done",100);
   const _elapsed=Date.now()-_activeGenStartTs;
-  _activeShowTime?.(_elapsed);
   const postRife=_activeNode?._h3_S?._temporalPostRife??null;
   const rifePostActive=_activeNode?._h3RifePostActive===true;
+  if(postRife&&!rifePostActive) _activeNativeGenMs=_elapsed;
+  _activeShowTime?.(rifePostActive&&_activeNativeGenMs>0?_activeNativeGenMs:_elapsed);
   if(postRife||rifePostActive){
     let wait=0;
     while((postRife&&!(_activeNode?._h3OutputItems||[]).length||rifePostActive&&!_activeShownFiles.length)&&wait<12){
@@ -3029,14 +3032,22 @@ app.registerExtension({
       galleryHdr.append(galleryTitle,saveTogBtn,galleryRefresh,galleryActs);
       const galleryWrap=mk("div",{display:"flex",flexDirection:"column",gap:"7px"});
       galleryWrap.append(galleryHdr,galleryBox);
-      rightPanel.append(previewBox,timeBar,galleryWrap);
+
 
       let _galItems=[];
       let _curItem=null;
+      const _rifeHiddenFiles=new Set();
+      const _isPlayerVideo=(item)=>!!item&&item.kind!=="image"&&!/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"");
+      const _playerItems=()=>{
+        const items=(_galItems||[]).filter(_isPlayerVideo);
+        return _galleryFavOnly?items.filter(item=>item.favorite):items;
+      };
+      let outputPlayer;
       const _updateGalleryFavoriteFilter=()=>{
         galleryFavBtn.classList.toggle("on",_galleryFavOnly);
         tx(galleryFavBtn._lbl,_galleryFavOnly?"All":"Favorites");
         galleryFavBtn.title=_galleryFavOnly?"Show all outputs":"Show favorite outputs";
+        outputPlayer?.sync();
       };
       const _updatePreviewFavorite=()=>{
         const active=!!_curItem;
@@ -3049,6 +3060,7 @@ app.registerExtension({
       previewFavBtn.onclick=()=>_favCurrent();
       const _showVideo=(item,fromFinish)=>{
         _curItem=item;
+        outputPlayer?.resetZoom();
         _updatePreviewFavorite();
         if(_cmpMode) _exitCompare();
         const imageCompare=S.mode==="image"&&["edit","refmix"].includes(S.imgSub)&&_cmpImageRefs.length>0&&_isImageItem(item);
@@ -3066,6 +3078,7 @@ app.registerExtension({
           _updateSeedChip(item.filename);
           if(_seedByFile[item.filename]===undefined) _showSeedFromHistory(item.filename);
           _updateTimeBar(item.filename);
+          outputPlayer?.sync();
           return;
         }
         vidEl.onloadedmetadata=()=>_updateResolutionChip(vidEl.videoWidth,vidEl.videoHeight);
@@ -3074,6 +3087,7 @@ app.registerExtension({
         _updateSeedChip(item.filename);
         if(_seedByFile[item.filename]===undefined) _showSeedFromHistory(item.filename);
         _updateTimeBar(item.filename);
+        outputPlayer?.sync();
         if(fromFinish&&S.playOnFinish===false){
           vidEl.muted=false;
           vidEl.load();
@@ -3085,6 +3099,11 @@ app.registerExtension({
         vidEl.muted=false;
         vidEl.play().catch(()=>{ vidEl.muted=true; vidEl.play().catch(()=>{}); });
       };
+      outputPlayer=createH3OutputPlayer({
+        mk,tx,C,previewBox,vidEl,imgEl,isVideo:_isPlayerVideo,
+        getItems:_playerItems,getCurrent:()=>_curItem,getMode:()=>_galleryFavOnly,showItem:_showVideo,
+      });
+      rightPanel.append(previewBox,outputPlayer.controls,timeBar,galleryWrap);
       const _copyVideoToInput=async(item)=>{
         if(!item||item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"")) return;
         try{
@@ -3230,7 +3249,8 @@ app.registerExtension({
         try{
           const r=await fetch("/h3one/gallery");
           const d=await r.json();
-          _galItems=d.videos||[];
+          _galItems=(d.videos||[]).filter(item=>!_rifeHiddenFiles.has(item.filename));
+          outputPlayer?.sync();
         }catch(e){ _galItems=[]; }
         const visible=_galItems.filter(item=>!_galleryFavOnly||item.favorite);
         if(!visible.length){
@@ -3311,10 +3331,13 @@ app.registerExtension({
         errorBox.style.display="none";
         self._h3OutputItems=self._h3OutputItems||[];
         self._h3OutputItems.push(item);
-        const deferNativeRife=(!!S._temporalPostRife||self._h3RifePostActive===true)&&String(item.subfolder||"").includes("temporal-batches");
-        if(deferNativeRife) return;
+        const deferNativeRife=!!S._temporalPostRife&&!self._h3RifePostActive;
+        if(deferNativeRife){
+          _rifeHiddenFiles.add(item.filename);
+          return;
+        }
         if(S.seed!==undefined&&S.seed!==null&&S.seed!=="") _seedByFile[item.filename]=S.seed;
-        const genMs=Date.now()-_activeGenStartTs;
+        const genMs=self._h3RifePostActive===true&&_activeNativeGenMs>0?_activeNativeGenMs:Date.now()-_activeGenStartTs;
         _genTimeByFile[item.filename]=genMs;
         const wasUpscale=_upscaleRun;
         const restoreMetadata=self._h3MetadataByPrompt?.[promptId]||self._h3RestoreMetadata;
@@ -4065,6 +4088,8 @@ app.registerExtension({
         _activeShowLatest=showLatest;
         _activeShownFiles=[];
         _activeGenStartTs=Date.now();
+        _activeNativeGenMs=0;
+        _rifeHiddenFiles.clear();
         showTime(0);
         _activePromptId=null;
         self._h3MetadataByPrompt={};
@@ -4254,6 +4279,13 @@ app.registerExtension({
       let _mouseOverRoot=false;
       root.addEventListener("mouseenter",()=>{ _mouseOverRoot=true; });
       root.addEventListener("mouseleave",()=>{ _mouseOverRoot=false; });
+      document.addEventListener("keydown",e=>{
+        if(!_mouseOverRoot||_cmpMode||e.ctrlKey||e.metaKey||e.altKey) return;
+        if(settingsOverlay.style.display!=="none"||historyOverlay.style.display!=="none"||libraryOverlay.style.display!=="none"||discoverOverlay.style.display!=="none") return;
+        const tag=(e.target||{}).tagName||"";
+        if(tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||(e.target||{}).isContentEditable) return;
+        outputPlayer?.handleKey(e);
+      });
       document.addEventListener("keydown",(e)=>{
         if(!e.ctrlKey||e.key!=="Enter") return;
         if(!_mouseOverRoot) return;
