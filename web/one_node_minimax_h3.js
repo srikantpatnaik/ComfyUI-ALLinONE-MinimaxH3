@@ -3166,8 +3166,12 @@ app.registerExtension({
             const imageBlob=await (await fetch(data.reference_image)).blob();
             const imageFile=new File([imageBlob],payload.reference_image_name||"h3-restored-reference.png",{type:imageBlob.type||"image/png"});
             if(S.mode==="i2v"){
-              if(S.firstFrame) firstSlot.loadFile(imageFile);
-              else lastSlot.loadFile(imageFile);
+              if(S.firstFrame){
+                await firstSlot.loadFile(imageFile);
+                if(S.lastFrame) lastSlot._restorePreview(S.lastFrame);
+              }else{
+                await lastSlot.loadFile(imageFile);
+              }
             }else if(S.mode==="r2v"||S.mode==="audio_drive"){
               const fd=new FormData();fd.append("image",imageFile);fd.append("overwrite","true");
               const upload=await api.fetchApi("/upload/image",{method:"POST",body:fd});
