@@ -17,8 +17,9 @@ This fork stays close to the upstream ALL-in-ONE MiniMax H3 node and keeps its c
 - **Preserved Extend source** — Extend conditions on the source tail as before, but the finished video is assembled from the original staged source file plus the generated tail. The previous source is kept out of the VAE and the final save is file-backed, avoiding a second low-quality tensor round trip.
 - **Readable reference previews** — first/last frames, reference images, keyframes, extend videos, and reference videos expand to a larger thumbnail that follows the loaded media’s aspect ratio instead of cropping it into a tiny square.
 - **VRAM-aware long renders** — on lower-memory GPUs, oversized duration × resolution requests are reduced to an aspect-safe H3 canvas before sampling, preserving the requested duration instead of failing mid-run with CUDA out-of-memory.
-- **Native high-resolution presets** — the Resolution menu includes native 1MP, 1.3MP, 2.1MP, and 2.4MP experimental canvases. When `ComfyUI-KJNodes` is installed, large H3 workloads automatically add its exact low-VRAM attention and feed-forward chunk patches.
-- **Native resolution-aware temporal batching** — `Temporal batches → Auto (RAM offload, resolution-aware)` keeps the selected canvas unchanged, chooses shorter H3-native chunks as pixel area grows, uses Motion Context continuation, and assembles one final video. This includes the exact 800×1088 portrait canvas and larger-than-1MP canvases; it is temporal batching, not upscaling or pixel downscaling. When enabled, RIFE runs afterward on the finished assembled file so 2x/4x interpolation remains available.
+- **Native high-resolution presets** — the Resolution menu includes native 1MP, 1.3MP, 2.1MP, and 2.4MP experimental canvases. The selected canvas is sampled through the native H3 path without attention or cache substitutions.
+- **Native resolution-aware temporal batching** — large duration × resolution requests automatically keep the selected canvas unchanged, choose shorter H3-native chunks as pixel area grows, use Motion Context continuation, and assemble one final video. This includes the exact 800×1088 portrait canvas and larger-than-1MP canvases; it is temporal batching, not upscaling or pixel downscaling. RIFE runs afterward on the finished assembled file so 2x/4x interpolation remains available.
+- **Native best-quality sampling** — the Tune panel no longer exposes Temporal batches or Quality/attention presets. The video path uses ComfyUI's native H3 model at the selected resolution, leaves Steps under user control, and never inserts SolAttn, H3 Cache, SageAttn, Turbo, or low-VRAM attention patches. Long high-resolution requests still use internal RAM-offloaded temporal assembly automatically when needed.
 - **Self-contained output restore** — when RIFE is enabled, temporal batching exposes only the final interpolated video and removes its native intermediate after success. H3 outputs carry the complete node settings plus the primary source image inside the video metadata; right-click an output and choose **Use restore settings** to bring the prompt, controls, models, references, and source image back into the node.
 - **Older-core chain fallback** — the node probes for ComfyUI PR #15439's native arbitrary-guide support. On older ComfyUI builds it automatically falls back to a final-frame H3 anchor for Chain and temporal continuation instead of sending an incompatible graph to `MiniMaxH3MotionContext`; native Motion Context remains enabled when available.
 
@@ -87,24 +88,12 @@ Official MiniMax H3 files from [Comfy-Org/MiniMax-H3](https://huggingface.co/Com
 | Chain | [ComfyUI-H3-Motion-Context-MultiRef](https://github.com/seitanism/ComfyUI-H3-Motion-Context-MultiRef) |
 | Upscale — RTX VSR | [Nvidia_RTX_Nodes_ComfyUI](https://github.com/Comfy-Org/Nvidia_RTX_Nodes_ComfyUI) (NVIDIA RTX GPUs only) |
 | Upscale — SeedVR2 | [ComfyUI-SeedVR2_VideoUpscaler](https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler) |
-| Native 1MP+ / 800×1088 video | [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) for the optional low-VRAM H3 attention and feed-forward patches; [ComfyUI-H3-Motion-Context-MultiRef](https://github.com/seitanism/ComfyUI-H3-Motion-Context-MultiRef) for temporal continuation and assembly |
+| Native 1MP+ / 800×1088 video | [ComfyUI-H3-Motion-Context-MultiRef](https://github.com/seitanism/ComfyUI-H3-Motion-Context-MultiRef) for automatic temporal continuation and assembly |
 | Image | [ComfyUI-MiniMax-H3-Studio](https://github.com/thaakeno/ComfyUI-MiniMax-H3-Studio) |
-
-**Per quality preset** (Settings → Quality)
-
-| Preset | Packs you need |
-|--------|----------------|
-| Turbo | [ComfyUI-MiniMax-H3-Turbo](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo) + a Turbo LoRA (below) |
-| Speed | [ComfyUI-SolAttn_triton](https://github.com/kijai/ComfyUI-SolAttn_triton) + [ComfyUI-MiniMaxH3-Cache](https://github.com/lihaoyun6/ComfyUI-MiniMaxH3-Cache) |
-| Balanced | [ComfyUI-SolAttn_triton](https://github.com/kijai/ComfyUI-SolAttn_triton) |
-| High | [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) (SageAttention) |
-| Native | — (ComfyUI core only) |
-
-Each accelerator also has an on/off chip under the Quality dropdown (SolAttn / H3 Cache / SageAttn) — flip them for any mix; the preset label switches to **Custom**. Accelerators that are switched off are not even written into the workflow, so their packs don't need to be installed.
 
 **Preview without saving** (auto-save off): [ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)
 
-**Live Preview** (the toggle under the video): [ComfyUI-MiniMax-H3-Studio](https://github.com/thaakeno/ComfyUI-MiniMax-H3-Studio) plus `taeh3.safetensors` in `ComfyUI/models/vae_approx/` ([Kijai/MiniMax-H3-TAE](https://huggingface.co/Kijai/MiniMax-H3-TAE)). Shows the video while it samples; slows generation a little. Works in every video mode, not with the Turbo preset or Image mode. Your copy can sit in a subfolder of `vae_approx`, pick it under Settings: Live Preview decoder. Tested on ComfyUI 0.32.
+**Live Preview** (the toggle under the video): [ComfyUI-MiniMax-H3-Studio](https://github.com/thaakeno/ComfyUI-MiniMax-H3-Studio) plus `taeh3.safetensors` in `ComfyUI/models/vae_approx/` ([Kijai/MiniMax-H3-TAE](https://huggingface.co/Kijai/MiniMax-H3-TAE)). Shows the video while it samples; slows generation a little. Works in every video mode except Image mode. Your copy can sit in a subfolder of `vae_approx`, pick it under Settings: Live Preview decoder. Tested on ComfyUI 0.32.
 
 **Image mode prompts**: they follow the H3 Studio shape, a `summary:` line with the goal and a `detailed_description:` with the full scene. Name your references `@Image1`, `@Image2` and give each one a clear job (identity, pose, style, outfit). Edits are a semantic regeneration of the source image, not pixel inpainting, so describe what changes instead of expecting a perfect cutout. The Discover tab ships with Text to image, Image edit and Reference mix templates.
 

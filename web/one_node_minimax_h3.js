@@ -835,36 +835,18 @@ app.registerExtension({
     nodeType.prototype._buildUI=function(){
       const self=this;
       const saved=loadState();
-      const _QF={
-        turbo:{sol:false,cache:false,sage:false},
-        speed:{sol:true,cache:true,sage:false},
-        balanced:{sol:true,cache:false,sage:false},
-        high:{sol:false,cache:false,sage:true},
-        native:{sol:false,cache:false,sage:false},
-      };
-      const _QL={balanced:"Balanced",speed:"Speed",high:"High Quality",turbo:"Turbo (Speed LoRA)",native:"Native",custom:"Custom"};
-      const _matchQ=()=>{
-        for(const k of ["speed","balanced","high","native"]){
-          const p=_QF[k];
-          if(!!S.optSol===p.sol&&!!S.optCache===p.cache&&!!S.optSage===p.sage) return k;
-        }
-        return "custom";
-      };
-
       if(!self._h3_S){
-        const _sq=(saved.quality==="custom"||(saved.quality&&_QF[saved.quality]))?saved.quality:"balanced";
-        const _qf=_QF[_sq]||{sol:false,cache:false,sage:false};
         self._h3_S={
           mode:            saved.mode||"t2v",
           prompt:          saved.prompt!==undefined?saved.prompt:"",
           resolution:      saved.resolution!==undefined?saved.resolution:"960x544 (0.5MP Balanced)",
           duration:        saved.duration!==undefined?saved.duration:5,
-          temporalBatching: saved.temporalBatching==="auto90"?"auto":(saved.temporalBatching||"auto"),
+          temporalBatching: "auto",
           steps:           (saved.steps&&saved.steps!==30)?saved.steps:20,
-          quality:         _sq,
-          optSol:          (saved.quality==="custom")?(saved.optSol!==undefined?saved.optSol:false):_qf.sol,
-          optCache:        (saved.quality==="custom")?(saved.optCache!==undefined?saved.optCache:false):_qf.cache,
-          optSage:         (saved.quality==="custom")?(saved.optSage!==undefined?saved.optSage:false):_qf.sage,
+          quality:         "native",
+          optSol:          false,
+          optCache:        false,
+          optSage:         false,
           samplerName:     saved.samplerName||"res_multistep",
           schedulerName:   saved.schedulerName||"simple",
           seed:            (typeof saved.seed==="number")?Math.max(0,Math.min(H3_SEED_MAX,Math.round(saved.seed))):0,
@@ -884,7 +866,6 @@ app.registerExtension({
           kf:              (Array.isArray(saved.kf)&&saved.kf.length)?saved.kf.map(k=>({img:k.img||null,pos:k.pos||0})):[{img:null,pos:1},{img:null,pos:62},{img:null,pos:124}],
           chainClips:      Array.isArray(saved.chainClips)&&saved.chainClips.length? saved.chainClips : [{prompt:"",duration:5},{prompt:"",duration:5}],
           models:          Object.assign({}, DEFAULT_MODELS, saved.models||{}),
-          speedLora:       saved.speedLora||"",
           audioOn:         saved.audioOn!==undefined?saved.audioOn:true,
           ...normalizeOutputSettings(saved),
           soundEnabled:    saved.soundEnabled!==undefined?saved.soundEnabled:true,
@@ -934,14 +915,14 @@ app.registerExtension({
         if(_updRecipeFn){ try{ _updRecipeFn(); }catch(e){} }
         saveState({
           mode:S.mode,prompt:S.prompt,resolution:S.resolution,duration:S.duration,
-          steps:S.steps,quality:S.quality,temporalBatching:S.temporalBatching,optSol:S.optSol,optCache:S.optCache,optSage:S.optSage,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
+          steps:S.steps,quality:"native",temporalBatching:"auto",optSol:false,optCache:false,optSage:false,samplerName:S.samplerName,schedulerName:S.schedulerName,randomizeSeed:S.randomizeSeed,seed:S.seed,batch:S.batch,
           loras:S.loras,chainClips:S.chainClips.map(c=>({prompt:c.prompt,duration:c.duration})),
           firstFrame:S.firstFrame,lastFrame:S.lastFrame,firstFrameSize:S.firstFrameSize,lastFrameSize:S.lastFrameSize,
           i2vAspect:S.i2vAspect,
           refImages:S.refImages,refVideos:S.refVideos,refAudios:S.refAudios,
           audioFile:S.audioFile,extendVideo:S.extendVideo,
           kf:(S.kf||[]).map(k=>({img:k.img||null,pos:k.pos||0})),
-          models:S.models,speedLora:S.speedLora,audioOn:S.audioOn,fps:S.fps,rifeMultiplier:S.rifeMultiplier,
+          models:S.models,audioOn:S.audioOn,fps:S.fps,rifeMultiplier:S.rifeMultiplier,
           soundEnabled:S.soundEnabled,sound:S.sound,accent:S.accent,mcLength:S.mcLength,
           upscaleFactor:S.upscaleFactor,upscaleMethod:S.upscaleMethod,
           modeSettings:S.modeSettings,
@@ -1181,13 +1162,6 @@ app.registerExtension({
       const upVaeRow=_mkModelRow("upscaleVae","Upscale VAE (SeedVR2)",["none"],()=>_updUpBtnTitle());
       const upHint=mk("div",{fontSize:"9px",color:C.muted,marginTop:"4px",lineHeight:"1.4",marginBottom:"12px"});
       tx(upHint,"Used by the 2x button under the video. Pick 'none' on the DiT to disable SeedVR2 - then switch the method to RTX VSR.");
-      const speedLoraWrap=mk("div",{marginBottom:"12px"});
-      speedLoraWrap.appendChild(cap("Speed LoRA (Turbo preset)"));
-      const speedLoraDD=DD(["none"],S.speedLora,v=>{S.speedLora=v==="none"?"":v;persist();});
-      speedLoraWrap.appendChild(speedLoraDD.el);
-      const speedLoraHint=mk("div",{fontSize:"9px",color:C.muted,marginTop:"4px",lineHeight:"1.4"});
-      tx(speedLoraHint,"Used by the Turbo quality preset.");
-      speedLoraWrap.appendChild(speedLoraHint);
       const audioToggle=Toggle("Generate native audio",S.audioOn,v=>{S.audioOn=v;persist();},"Audio Drive and R2V (with audio refs) always use the audio you provide - this toggle only controls the model's own generated soundtrack in T2V / I2V / Keyframes. You do not need to turn it off for audio modes.");
       const soundToggle=Toggle("Notification sound on complete",S.soundEnabled,v=>{S.soundEnabled=v;persist();});
       const playOnFinishToggle=Toggle("Play video on finish",S.playOnFinish,v=>{S.playOnFinish=v;persist();});
@@ -1225,7 +1199,7 @@ app.registerExtension({
       tx(supBtn,"Buy me a coffee");
       supBtn.onclick=()=>window.open(SUPPORT_URL,"_blank");
       supWrap.append(supCap,supBtn);
-      settingsOverlay.append(settHdr,unetT2VRow,unetR2VRow,clipRow,vaeVRow,vaeARow,taeRow,upMethodWrap,upDitRow,upVaeRow,upHint,speedLoraWrap,audioToggle.el,soundToggle.el,playOnFinishToggle.el,sndWrap,accWrap,supWrap);
+      settingsOverlay.append(settHdr,unetT2VRow,unetR2VRow,clipRow,vaeVRow,vaeARow,taeRow,upMethodWrap,upDitRow,upVaeRow,upHint,audioToggle.el,soundToggle.el,playOnFinishToggle.el,sndWrap,accWrap,supWrap);
 
       // -- HISTORY OVERLAY ---------------------------------------------------
       const historyOverlay=mk("div",{
@@ -2426,14 +2400,13 @@ app.registerExtension({
           return res;
         }
         if(S._h3WorkloadCap===undefined){
-          const nativeHighRes=S._nativeHighResNodes?.attention&&S._nativeHighResNodes?.ffn;
-          S._h3WorkloadCap=nativeHighRes?320000000:180000000;
+          S._h3WorkloadCap=180000000;
           try{
             const r=await fetch("/system_stats");
             const d=await r.json();
             const total=Number(d?.devices?.[0]?.vram_total)||0;
-            if(total>20e9) S._h3WorkloadCap=nativeHighRes?600000000:420000000;
-            else if(total>14e9) S._h3WorkloadCap=nativeHighRes?420000000:280000000;
+            if(total>20e9) S._h3WorkloadCap=420000000;
+            else if(total>14e9) S._h3WorkloadCap=280000000;
           }catch(e){}
         }
         const work=Number(res.width)*Number(res.height)*Number(frames);
@@ -2473,64 +2446,10 @@ app.registerExtension({
       durInner.append(durNI,framesLbl);
       durRow.append(durCap,durInner);
       const {fpsRow,rifeRow,fpsNI,rifeDD}=createOutputControls({S,mk,tx,infoIcon,NI,DD,persist,updateFramesLabel:()=>_updateFramesLabel()});
-      const temporalRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
-      const temporalCapRow=mk("div",{display:"flex",alignItems:"center",gap:"4px"});
-      const temporalCap=mk("div",{fontSize:"10px",color:C.text});tx(temporalCap,"Temporal batches");
-      temporalCapRow.append(temporalCap,infoIcon("Keep the selected native resolution and split only time into sequential H3 chunks. Auto uses shorter H3-native chunks as the pixel area grows: up to 90 frames below 1MP, 73 below 1.5MP, 56 below 2.2MP, and 39 above that. The final assembler writes one video. This uses ComfyUI's VRAM/RAM offload path; it does not upscale or shrink the requested canvas."));
-      const temporalDD=DD(["Off","Auto (RAM offload, resolution-aware)","Manual 90-frame chunks","Manual 124-frame chunks"],({off:"Off",auto:"Auto (RAM offload, resolution-aware)",auto90:"Manual 90-frame chunks",auto124:"Manual 124-frame chunks"}[S.temporalBatching]||"Auto (RAM offload, resolution-aware)"),v=>{
-        S.temporalBatching=v==="Off"?"off":v.includes("resolution")?"auto":v.includes("124")?"auto124":"auto90";
-        persist();
-      });
-      temporalRow.append(temporalCapRow,temporalDD.el);
       const stepsRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
       const stepsCap=mk("div",{fontSize:"10px",color:C.text});tx(stepsCap,"Steps");
       const stepsNI=NI("",S.steps,1,60,1,v=>{S.steps=Math.round(v);persist();},"60px");
       stepsRow.append(stepsCap,stepsNI);
-      const qualRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
-      const qualCapRow=mk("div",{display:"flex",alignItems:"center",gap:"4px"});
-      const qualCap=mk("div",{fontSize:"10px",color:C.text});tx(qualCap,"Quality");
-      qualCapRow.append(qualCap,infoIcon("The sampling pipeline, not the pixel size. Use the chips below to switch each accelerator on or off - Quality follows, and any manual mix shows as Custom.\nTurbo: Turbo LoRA + 6-step distilled sampler. Fastest, visibly lower quality - needs the Turbo LoRA set in Settings.\nSpeed: SolAttn + H3 block cache. Fastest normal pipeline, tiny quality tradeoff.\nBalanced: SolAttn sparse attention only.\nHigh Quality: full SageAttention only - slowest, maximum fidelity.\nNative: core ComfyUI H3 pipeline, no accelerators - needs no extra packs."));
-      const qualDD=DD(["Turbo (Speed LoRA)","Speed","Balanced","High Quality","Native","Custom"],_QL[S.quality]||"Custom",v=>{
-        const key=Object.keys(_QL).find(k=>_QL[k]===v)||"custom";
-        if(key!=="custom"){
-          S.quality=key;
-          const f=_QF[key]||{sol:false,cache:false,sage:false};
-          S.optSol=f.sol;S.optCache=f.cache;S.optSage=f.sage;
-          _syncOptChips();
-        } else {
-          S.quality="custom";
-        }
-        persist();
-        if(S.quality==="turbo"){ stepsNI._inp.value="6"; S.steps=6; }
-        if(typeof _syncLiveToggle==="function") _syncLiveToggle();
-      });
-      qualRow.append(qualCapRow,qualDD.el);
-      const optRow=mk("div",{display:"flex",gap:"5px",flexWrap:"wrap"});
-      const _optChipSyncs=[];
-      const _mkOptChip=(key,label)=>{
-        const chip=mk("button",{borderRadius:"6px",padding:"3px 9px",fontSize:"9px",fontWeight:"700",cursor:"pointer",outline:"none",transition:"background .15s,color .15s,border-color .15s"});
-        const _sync=()=>{
-          const on=!!S[key];
-          chip.style.background=on?C.lime:C.bg2;
-          chip.style.color=on?"#111":C.muted;
-          chip.style.border=`1px solid ${on?C.lime:C.border}`;
-          tx(chip,(on?"✓ ":"· ")+label);
-          chip.title=(on?"Enabled":"Disabled")+" - click to "+(on?"disable":"enable");
-        };
-        chip.onclick=()=>{
-          S[key]=!S[key];
-          S.quality=_matchQ();
-          qualDD.set(_QL[S.quality]);
-          _sync();persist();
-          if(typeof _syncLiveToggle==="function") _syncLiveToggle();
-        };
-        _sync();
-        _optChipSyncs.push(_sync);
-        return chip;
-      };
-      const _syncOptChips=()=>_optChipSyncs.forEach(f=>f());
-      optRow.append(_mkOptChip("optSol","SolAttn"),_mkOptChip("optCache","H3 Cache"),_mkOptChip("optSage","SageAttn"));
-      qualRow.appendChild(optRow);
       const SAMPLERS=["euler","euler_cfg_pp","euler_ancestral","euler_ancestral_cfg_pp","heun","heunpp2","exp_heun_2_x0","exp_heun_2_x0_sde","dpm_2","dpm_2_ancestral","lms","dpm_fast","dpm_adaptive","dpmpp_2s_ancestral","dpmpp_2s_ancestral_cfg_pp","dpmpp_sde","dpmpp_sde_gpu","dpmpp_2m","dpmpp_2m_cfg_pp","dpmpp_2m_sde","dpmpp_2m_sde_gpu","dpmpp_2m_sde_heun","dpmpp_2m_sde_heun_gpu","dpmpp_3m_sde","dpmpp_3m_sde_gpu","ddpm","lcm","ipndm","ipndm_v","deis","res_multistep","res_multistep_cfg_pp","res_multistep_ancestral","res_multistep_ancestral_cfg_pp","gradient_estimation","gradient_estimation_cfg_pp","er_sde","seeds_2","seeds_3","sa_solver","sa_solver_pece","ddim","uni_pc","uni_pc_bh2","legacy_rk","rk","rk_beta","deis_3m_ode","deis_2m_ode","deis_3m","deis_2m","res_6s_ode","res_5s_ode","res_3s_ode","res_2s_ode","res_3m_ode","res_2m_ode","res_6s","res_5s","res_3s","res_2s","res_3m","res_2m"];
       const SCHEDULERS=["simple","sgm_uniform","karras","exponential","ddim_uniform","beta","normal","linear_quadratic","kl_optimal","bong_tangent","beta57"];
       const samplerRow=mk("div",{display:"flex",flexDirection:"column",gap:"3px"});
@@ -2545,7 +2464,7 @@ app.registerExtension({
       schedCapRow.append(schedCap,infoIcon("The noise schedule. MiniMax H3's native workflows use simple - keep it unless you know why you're changing it."));
       const schedDD=DD(SCHEDULERS,S.schedulerName||"simple",v=>{S.schedulerName=v;persist();});
       schedRow.append(schedCapRow,schedDD.el);
-      params.append(resRow,durRow,fpsRow,rifeRow,temporalRow,stepsRow,qualRow,samplerRow,schedRow);
+      params.append(resRow,durRow,fpsRow,rifeRow,stepsRow,samplerRow,schedRow);
 
       // Custom sampling controls for Image mode (shown when the profile is Custom)
       const imgAdvRow=mk("div",{display:"none",flexDirection:"column",gap:"7px"});
@@ -2579,26 +2498,8 @@ app.registerExtension({
         if(!ms) return;
         if(ms.prompt!==undefined){ S.prompt=ms.prompt; promptTA.value=ms.prompt; _updChars(); }
         if(ms.steps!==undefined){ S.steps=ms.steps; stepsNI._inp.value=String(ms.steps); }
-        if(ms.quality!==undefined){
-          S.quality=ms.quality;
-          if(ms.quality==="custom"){
-            if(ms.optSol!==undefined) S.optSol=ms.optSol;
-            if(ms.optCache!==undefined) S.optCache=ms.optCache;
-            if(ms.optSage!==undefined) S.optSage=ms.optSage;
-          } else {
-            const f=_QF[ms.quality]||{sol:false,cache:false,sage:false};
-            S.optSol=f.sol;S.optCache=f.cache;S.optSage=f.sage;
-          }
-          _syncOptChips();
-          qualDD.set(_QL[ms.quality]||"Custom");
-        }
-        if(typeof _syncLiveToggle==="function") _syncLiveToggle();
         if(ms.resolution!==undefined){ S.resolution=ms.resolution; resDD.set(ms.resolution); _updResCustom(); }
         if(ms.duration!==undefined){ S.duration=ms.duration; durNI._inp.value=String(ms.duration); _updateFramesLabel(); }
-        if(ms.temporalBatching!==undefined){
-          S.temporalBatching=ms.temporalBatching==="auto90"?"auto":ms.temporalBatching;
-          temporalDD.set({off:"Off",auto:"Auto (RAM offload, resolution-aware)",auto90:"Manual 90-frame chunks",auto124:"Manual 124-frame chunks"}[S.temporalBatching]||"Auto (RAM offload, resolution-aware)");
-        }
         if(Array.isArray(ms.loras)){ const named=ms.loras.filter(l=>l&&l.name); S.loras=named.concat([{name:"",strength:1}]); _renderLoras(); }
         if(Array.isArray(ms.refImages)) S.refImages=ms.refImages.slice();
         if(Array.isArray(ms.refVideos)) S.refVideos=ms.refVideos.map(v=>(typeof v==="string")?{name:v,useAudio:false}:{name:(v&&v.name)||"",useAudio:!!(v&&v.useAudio)});
@@ -3064,17 +2965,10 @@ app.registerExtension({
       const liveTogBtn=mk("button",{}, {type:"button",className:"h3-actbtn"+(S.livePreview?" on":"")});
       liveTogBtn._lbl=mk("span",{}, {textContent:S.livePreview?"Preview On":"Preview Off"});
       liveTogBtn.appendChild(liveTogBtn._lbl);
-      const liveInfo=infoIcon("Live Preview: watch the video appear while it samples. Each step is decoded with a tiny TAEH3 model on the CPU, so generation takes a little longer.\nNeeds taeh3.safetensors in a ComfyUI models/vae_approx folder - download it from huggingface.co/Kijai/MiniMax-H3-TAE. If your copy lives in a subfolder, pick it under Settings: Live Preview decoder.\nNot available with the Turbo preset or in Image mode.");
+      const liveInfo=infoIcon("Live Preview: watch the video appear while it samples. Each step is decoded with a tiny TAEH3 model on the CPU, so generation takes a little longer.\nNeeds taeh3.safetensors in a ComfyUI models/vae_approx folder - download it from huggingface.co/Kijai/MiniMax-H3-TAE. If your copy lives in a subfolder, pick it under Settings: Live Preview decoder.\nNot available in Image mode.");
       const _syncLiveToggle=()=>{
         const hidden=S.mode==="image";
         liveTogWrap.style.display=hidden?"none":"flex";
-        const blocked=(S.quality==="turbo"&&S.mode!=="chain"&&S.mode!=="image");
-        if(blocked){
-          liveTogBtn.classList.remove("on");
-          liveTogBtn.style.opacity=".45";liveTogBtn.style.pointerEvents="none";
-          liveTogBtn.title="Live Preview is not available with the Turbo preset. Pick another quality preset first.";
-          return;
-        }
         liveTogBtn.style.opacity="";liveTogBtn.style.pointerEvents="";
         liveTogBtn.classList.toggle("on",!!S.livePreview);
         tx(liveTogBtn._lbl,S.livePreview?"Preview On":"Preview Off");
@@ -3209,15 +3103,11 @@ app.registerExtension({
           if(S.fps!==undefined){ fpsNI.setVal(S.fps); }
           if(S.rifeMultiplier!==undefined){ rifeDD.set(`${S.rifeMultiplier}x${S.rifeMultiplier===1?" (off)":""}`); }
           if(S.steps!==undefined) stepsNI._inp.value=String(S.steps);
-          if(S.quality){
-            qualDD.set(_QL[S.quality]||"Custom");
-            _syncOptChips();
-          }
           if(S.samplerName) samplerDD.set(S.samplerName);
           if(S.schedulerName) schedDD.set(S.schedulerName);
-          if(S.temporalBatching){
-            temporalDD.set({off:"Off",auto:"Auto (RAM offload, resolution-aware)",auto90:"Manual 90-frame chunks",auto124:"Manual 124-frame chunks"}[S.temporalBatching]||"Auto (RAM offload, resolution-aware)");
-          }
+          S.quality="native";
+          S.optSol=false;S.optCache=false;S.optSage=false;
+          S.temporalBatching="auto";
           if(S.seed!==undefined) seedNI._inp.value=String(S.seed);
           if(S.batch!==undefined) batchNI._inp.value=String(S.batch);
           _updSeedUI();
@@ -3489,24 +3379,6 @@ app.registerExtension({
         }
         return await res.json();
       };
-      const _loadNativeHighResNodes=async()=>{
-        if(S._nativeHighResNodes!==undefined) return;
-        S._nativeHighResNodes={attention:false,ffn:false};
-        const hasNode=async(name)=>{
-          try{
-            const res=await fetch(`/object_info/${name}`);
-            if(!res.ok) return false;
-            const data=await res.json();
-            return !!data?.[name];
-          }catch(e){ return false; }
-        };
-        const [attention,ffn]=await Promise.all([
-          hasNode("MiniMaxLowVRAMAttention"),
-          hasNode("MiniMaxChunkFeedForward"),
-        ]);
-        S._nativeHighResNodes={attention,ffn};
-      };
-
       const _finalPrompt=(userText,tplKey)=>{
         let text=(userText||"").trim();
         if(!text) return "";
@@ -3579,26 +3451,6 @@ app.registerExtension({
         });
       };
 
-      const _insertNativeHighResPatches=(wf,modelSrc,newId)=>{
-        const caps=S._nativeHighResNodes||{};
-        if(!caps.attention&&!caps.ffn) return modelSrc;
-        const res=S._generationRes||_resolveRes();
-        const megapixels=(Number(res.width)*Number(res.height))/1000000;
-        if(!(megapixels>=0.7)) return modelSrc;
-        const chunks=megapixels>=1.6?8:4;
-        if(caps.attention){
-          const id=newId();
-          wf[id]={class_type:"MiniMaxLowVRAMAttention",inputs:{model:modelSrc,head_chunks:chunks},_meta:{title:`H3 Low VRAM Attention (${chunks} groups)`}};
-          modelSrc=[id,0];
-        }
-        if(caps.ffn){
-          const id=newId();
-          wf[id]={class_type:"MiniMaxChunkFeedForward",inputs:{model:modelSrc,chunks,seq_threshold:4096},_meta:{title:`H3 Chunk FeedForward (${chunks} chunks)`}};
-          modelSrc=[id,0];
-        }
-        return modelSrc;
-      };
-
       const _insertModelPatches=(wf)=>{
         let modelSrc=["2",0];
         let nextId=100;
@@ -3609,55 +3461,8 @@ app.registerExtension({
           wf[id]={class_type:"LoraLoaderModelOnly",inputs:{model:modelSrc,lora_name:lr.name,strength_model:lr.strength},_meta:{title:"LoRA"}};
           modelSrc=[id,0];
         });
-        const q=S.quality;
-        if(q==="turbo"){
-          if(!S.speedLora) throw new Error("Turbo preset needs a Turbo LoRA - set one in Settings (Speed LoRA) or pick another quality.");
-          {
-            const tl=newId();
-            wf[tl]={class_type:"MiniMaxH3TurboLoRA",inputs:{model:modelSrc,lora_name:S.speedLora,strength:1,low_vram:false},_meta:{title:"Turbo LoRA"}};
-            modelSrc=[tl,0];
-          }
-          const ts=newId();
-          wf[ts]={class_type:"MiniMaxH3TurboSampler",inputs:{},_meta:{title:"Turbo Sampler"}};
-          wf["10"]=wf[ts];delete wf[ts];
-          wf["9"].inputs.steps=S.steps||6;
-        } else {
-          const useSol=!!S.optSol, useCache=!!S.optCache, useSage=!!S.optSage;
-          const insSol=()=>{
-            const sol=newId();
-            wf[sol]={class_type:"SolAttnPatch",inputs:{
-              model:modelSrc,tau:1.3,start_percent:0.2,end_percent:0.9,min_tokens:4096,
-              int8_qk:true,sink_conditioning:"exact_kv_and_rows",morton:false,
-              morton_curve:"2d_frame",int8_pv:true,verbose:true,use_tma:false,dense_blocks:"",
-            },_meta:{title:"Sol-Attn"}};
-            modelSrc=[sol,0];
-          };
-          const insCache=()=>{
-            const cache=newId();
-            wf[cache]={class_type:"MiniMaxH3Cache",inputs:{
-              model:modelSrc,resuse_threshold:0.1,start_percent:0.15,end_percent:0.9,
-              max_steps:2,device:"auto",verbose:false,
-            },_meta:{title:"H3 Cache"}};
-            modelSrc=[cache,0];
-          };
-          const insSage=()=>{
-            const sage=newId();
-            wf[sage]={class_type:"MiniMaxH3MemoryEfficientSageAttentionPatch",inputs:{model:modelSrc},_meta:{title:"SageAttn"}};
-            modelSrc=[sage,0];
-          };
-          if(useSage&&useSol){
-            // Sol + Sage together: follow the tested ordering (cache -> sage -> sol)
-            if(useCache) insCache();
-            insSage();insSol();
-          } else {
-            // Preset combos keep their exact historical order (sol -> cache -> sage)
-            if(useSol) insSol();
-            if(useCache) insCache();
-            if(useSage) insSage();
-          }
-          wf["9"].inputs.steps=S.steps;
-        }
-        wf["5"].inputs.model=_insertNativeHighResPatches(wf,modelSrc,newId);
+        wf["5"].inputs.model=modelSrc;
+        wf["9"].inputs.steps=S.steps;
       };
 
       const _insertImageModelPatches=(wf)=>{
@@ -3698,7 +3503,6 @@ app.registerExtension({
 
       const _patchCommon=async(wf)=>{
         S._memoryFitNote="";
-        await _loadNativeHighResNodes();
         wf["1"].inputs.clip_name=S.models.clip;
         const condNode=wf["6"];
         const isR2V=condNode&&condNode.class_type==="MiniMaxH3ReferenceToVideo";
@@ -4037,7 +3841,6 @@ app.registerExtension({
         const clips=temporal?S._temporalChainClips:S.chainClips;
         const wf={};
         const sharedKeys=["s:1","s:2","s:3","s:4","s:5"];
-        await _loadNativeHighResNodes();
         const maxFrames=Math.max(1,...clips.map(cl=>snapFrames(cl.duration,S.fps)));
         const res=await _memoryFitResolution(_resolveRes(),maxFrames);
         S._generationRes=res;
@@ -4132,40 +3935,6 @@ app.registerExtension({
           wf[id]={class_type:"LoraLoaderModelOnly",inputs:{model:modelSrc,lora_name:lr.name,strength_model:lr.strength},_meta:{title:"LoRA"}};
           modelSrc=[id,0];
         });
-        {
-          const useSol=!!S.optSol, useCache=!!S.optCache, useSage=!!S.optSage;
-          const insSol=()=>{
-            const sol=newId();
-            wf[sol]={class_type:"SolAttnPatch",inputs:{
-              model:modelSrc,tau:1.3,start_percent:0.2,end_percent:0.9,min_tokens:4096,
-              int8_qk:true,sink_conditioning:"exact_kv_and_rows",morton:false,
-              morton_curve:"2d_frame",int8_pv:true,verbose:true,use_tma:false,dense_blocks:"",
-            },_meta:{title:"Sol-Attn"}};
-            modelSrc=[sol,0];
-          };
-          const insCache=()=>{
-            const cache=newId();
-            wf[cache]={class_type:"MiniMaxH3Cache",inputs:{
-              model:modelSrc,resuse_threshold:0.1,start_percent:0.15,end_percent:0.9,
-              max_steps:2,device:"auto",verbose:false,
-            },_meta:{title:"H3 Cache"}};
-            modelSrc=[cache,0];
-          };
-          const insSage=()=>{
-            const sage=newId();
-            wf[sage]={class_type:"MiniMaxH3MemoryEfficientSageAttentionPatch",inputs:{model:modelSrc},_meta:{title:"SageAttn"}};
-            modelSrc=[sage,0];
-          };
-          if(useSage&&useSol){
-            if(useCache) insCache();
-            insSage();insSol();
-          } else {
-            if(useSol) insSol();
-            if(useCache) insCache();
-            if(useSage) insSage();
-          }
-        }
-        modelSrc=_insertNativeHighResPatches(wf,modelSrc,newId);
         wf["s:5"].inputs.model=modelSrc;
         if(S.livePreview){
           wf["s:lp"]={class_type:"H3StudioTAEH3Preview",inputs:{
@@ -4323,7 +4092,6 @@ app.registerExtension({
           modelDDs.clip.updateItems(clipItems);
           modelDDs.vaeVideo.updateItems(_M.vaes);
           modelDDs.vaeAudio.updateItems(_M.vaes);
-          speedLoraDD.updateItems(["none"].concat(_M.loras));
           const loraItems=_M.loras.length?_M.loras:["none"];
           _renderLoras();
           _checkTae();
@@ -4384,7 +4152,6 @@ app.registerExtension({
       const _updRecipe=()=>{
         if(!recipeEl) return;
         recipeEl.innerHTML="";
-        const _q=_QL[S.quality]||"Custom";
         const chip=(label,value,media)=>{
           const c=mk("span",{}, {className:"h3-chip"+(media?" media":"")});
           if(label) c.appendChild(mk("span",{}, {className:"cl",textContent:label}));
@@ -4405,7 +4172,6 @@ app.registerExtension({
         chip(null,S.mode==="chain"?`${S.chainClips.length} clips`:`${S.duration}s`,true);
         recipeEl.appendChild(mk("span",{}, {className:"h3-gsep","aria-hidden":"true"}));
         chip("steps",String(S.steps));
-        chip(null,_q);
         chip(null,`${S.samplerName||"res_multistep"} · ${S.schedulerName||"simple"}`);
         chip("seed",S.randomizeSeed?"random":String(S.seed||0));
         chip(null,`×${S.batch||1}`);
