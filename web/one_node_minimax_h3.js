@@ -402,6 +402,11 @@ function ImgSlot(optional,onFile,onSize){
   });
   const rm=mkRmBtn();
   const inp=mk("input",{display:"none"},{type:"file",accept:"image/*"});
+  const pasteField=mk("input",{
+    position:"absolute",top:"4px",left:"4px",right:"25px",height:"18px",boxSizing:"border-box",
+    padding:"0 4px",border:`1px solid ${C.border}`,borderRadius:"4px",background:"rgba(0,0,0,.72)",
+    color:C.text,fontSize:"7px",outline:"none",zIndex:"3",minWidth:"0",
+  },{type:"text",placeholder:"Paste image"});
   const sourceBtns=mk("div",{
     position:"absolute",left:"4px",right:"4px",bottom:"4px",display:"flex",gap:"3px",zIndex:"1",
   });
@@ -419,7 +424,7 @@ function ImgSlot(optional,onFile,onSize){
     }})),
     sourceBtn("PC",()=>inp.click()),
   );
-  wrap.append(icoWrap,prevEl,rm,sourceBtns,inp);
+  wrap.append(icoWrap,prevEl,rm,sourceBtns,pasteField,inp);
   wrap.onmouseenter=()=>{wrap.style.borderColor=C.lime;};
   wrap.onmouseleave=()=>{wrap.style.borderColor=C.border;};
   wrap.onclick=()=>{};
@@ -451,6 +456,20 @@ function ImgSlot(optional,onFile,onSize){
       const d=await r.json();_currentName=d.name||file.name;
       onFile(_currentName);
     }catch(err){console.warn("[H3One] upload:",err);_currentName=file.name;onFile(_currentName);}
+  };
+  pasteField.onpaste=async e=>{
+    const item=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith("image/"));
+    if(!item) return;
+    e.preventDefault();e.stopPropagation();
+    const raw=item.getAsFile();
+    if(!raw) return;
+    const ext=(raw.type.split("/")[1]||"png").replace("jpeg","jpg");
+    const name=`pasted_${Date.now()}_${Math.floor(Math.random()*1e4)}.${ext}`;
+    let file;
+    try{ file=new File([raw],name,{type:raw.type}); }
+    catch(_){ file=raw; file.name=name; }
+    pasteField.value="";
+    await _load(file);
   };
   inp.onchange=()=>{if(inp.files[0])_load(inp.files[0]);};
   rm.onclick=e=>{
