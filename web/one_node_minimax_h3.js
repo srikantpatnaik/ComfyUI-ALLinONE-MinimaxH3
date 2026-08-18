@@ -4226,6 +4226,7 @@ app.registerExtension({
             }
           }
           _updResCustom();
+          _updRecipe();
           _discTmpl=d.prompt_templates||{};
         }catch(e){console.warn("[H3One] load config:",e);}
       };
