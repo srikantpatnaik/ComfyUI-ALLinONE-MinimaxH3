@@ -1019,6 +1019,7 @@ app.registerExtension({
           .h3-actbtn.on:hover{color:#141414;filter:brightness(1.07);}
           .h3-actbtn.danger:hover{border-color:rgba(255,128,128,.55);color:var(--h3-err);}
           .h3-actbtn.warn{border-color:rgba(255,194,102,.4);}
+          .h3-output-card.active{border-color:var(--h3accent) !important;box-shadow:0 0 0 2px rgba(var(--h3accent-rgb),.22),0 3px 12px rgba(0,0,0,.45);}
           /* seed chip over the preview */
           .h3-previewmeta{position:absolute;top:8px;right:8px;display:flex;align-items:center;gap:6px;z-index:4;}
           .h3-previewmeta .h3-seedchip{position:static;}
@@ -2751,11 +2752,18 @@ app.registerExtension({
       const previewMeta=mk("div",{}, {className:"h3-previewmeta"});
       previewMeta.append(resolutionChip,previewFavBtn,seedChip);
       const fullscreenProvider=mk("div",{position:"absolute",top:"10px",left:"10px",display:"none",padding:"4px 7px",borderRadius:"5px",background:"rgba(0,0,0,.78)",color:"#fff",fontSize:"10px",fontWeight:"700",letterSpacing:".04em",lineHeight:"1.2",zIndex:"8",pointerEvents:"none"},{textContent:"H3"});
+      const fullscreenDetails=mk("div",{position:"absolute",top:"10px",right:"10px",display:"none",flexDirection:"column",alignItems:"flex-end",gap:"4px",padding:"5px",borderRadius:"7px",background:"rgba(0,0,0,.78)",color:"#fff",fontSize:"9px",fontWeight:"700",lineHeight:"1.2",zIndex:"8",pointerEvents:"none",fontVariantNumeric:"tabular-nums"});
+      const fullscreenDetailProvider=mk("div",{padding:"2px 4px"},{textContent:"H3"});
+      const fullscreenDetailFavorite=mk("div",{padding:"2px 4px"},{textContent:"☆"});
+      const fullscreenDetailResolution=mk("div",{padding:"2px 4px"},{textContent:"—"});
+      const fullscreenDetailTime=mk("div",{padding:"2px 4px"},{textContent:"—"});
+      fullscreenDetails.append(fullscreenDetailProvider,fullscreenDetailFavorite,fullscreenDetailResolution,fullscreenDetailTime);
       const liveChip=mk("div",{}, {className:"h3-livechip"});
       const liveDot=mk("span",{}, {className:"lcdot"});
       const liveTxt=mk("span",{}, {className:"lctxt",textContent:"Live preview"});
       liveChip.append(liveDot,liveTxt);
       const _providerLabel=item=>item&&(item.engine==="ltx25"||item.mode==="ltx25-i2v"||/ltx25/i.test(item.filename||""))?"LTX2.5":"H3";
+      let _syncFullscreenDetails=()=>{};
       const _syncFullscreenOverlay=()=>{
         const isPreviewFullscreen=!!document.fullscreenElement&&previewBox.contains(document.fullscreenElement);
         const isFullscreen=_inFullscreen||isPreviewFullscreen;
@@ -2763,6 +2771,7 @@ app.registerExtension({
         previewMeta.style.display=isFullscreen?"none":"";
         tx(fullscreenProvider,_providerLabel(_curItem));
         fullscreenProvider.style.display=isFullscreen?"block":"none";
+        _syncFullscreenDetails();
       };
       document.addEventListener("fullscreenchange",_syncFullscreenOverlay);
       const _showLiveChip=(show,dim=false)=>{
@@ -2787,7 +2796,7 @@ app.registerExtension({
       };
       self._h3_lpReset=()=>{ _showLiveChip(true,true); };
       self._h3_lpErr=(msg)=>{ _showLiveChip(false); showError(msg); };
-      previewBox.append(placeholder,vidEl,imgEl,errorBox,progWrap,previewMeta,fullscreenProvider,liveChip);
+      previewBox.append(placeholder,vidEl,imgEl,errorBox,progWrap,previewMeta,fullscreenProvider,fullscreenDetails,liveChip);
       const comparerWrap=mk("div",{position:"absolute",inset:"0",display:"none",cursor:"col-resize",userSelect:"none",borderRadius:"10px",overflow:"hidden",zIndex:"3"},{tabIndex:"0",role:"slider","aria-label":"Image comparison position","aria-valuemin":"0","aria-valuemax":"100","aria-valuenow":"50"});
       const cmpBase=mk("video",{position:"absolute",inset:"0",width:"100%",height:"100%",objectFit:"contain",background:"#000",display:"none"},{muted:true,loop:true,preload:"auto"});
       const cmpBaseImg=mk("img",{position:"absolute",inset:"0",width:"100%",height:"100%",objectFit:"contain",background:"#000",display:"none"},{alt:"Comparison source"});
@@ -3116,6 +3125,12 @@ app.registerExtension({
 
       let _galItems=[];
       let _curItem=null;
+      const _syncGalleryCurrent=()=>{
+        galleryBox.querySelectorAll(".h3-output-card").forEach(card=>{
+          const active=!!_curItem&&card.dataset.outputFilename===_curItem.filename&&card.dataset.outputSubfolder===(_curItem.subfolder||"");
+          card.classList.toggle("active",active);
+        });
+      };
       const _rifeHiddenFiles=new Set();
       const _isPlayerVideo=(item)=>!!item&&item.kind!=="image"&&!/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"");
       const _playerItems=()=>{
@@ -3140,7 +3155,9 @@ app.registerExtension({
       previewFavBtn.onclick=()=>_favCurrent();
       const _showVideo=(item,fromFinish)=>{
         _curItem=item;
+        _syncGalleryCurrent();
         _syncFullscreenOverlay();
+        _loadFullscreenMetadata(item);
         outputPlayer?.resetZoom();
         _updatePreviewFavorite();
         if(_cmpMode) _exitCompare();
@@ -3182,6 +3199,7 @@ app.registerExtension({
       outputPlayer=createH3OutputPlayer({
         mk,tx,C,previewBox,vidEl,imgEl,isVideo:_isPlayerVideo,
         getItems:_playerItems,getCurrent:()=>_curItem,getMode:()=>_galleryFavOnly,showItem:_showVideo,
+        onFullscreenDetailsChange:()=>_syncFullscreenOverlay(),
       });
       rightPanel.append(previewBox,outputPlayer.controls,timeBar,galleryWrap);
       const _stageVideoForExtend=async(item,selectMode=true)=>{
@@ -3351,7 +3369,9 @@ app.registerExtension({
           return `${hours}h${String(minutes%60).padStart(2,"0")}m${String(remainder).padStart(2,"0")}s`;
         };
         visible.forEach(item=>{
-          const card=mk("div",{width:"96px",flexShrink:"0",cursor:"pointer",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:"7px",overflow:"hidden"});
+          const card=mk("div",{width:"96px",flexShrink:"0",cursor:"pointer",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:"7px",overflow:"hidden"},{className:"h3-output-card"});
+          card.dataset.outputFilename=item.filename||"";
+          card.dataset.outputSubfolder=item.subfolder||"";
           const url=api.apiURL(`/view?filename=${encodeURIComponent(item.filename)}&type=output&subfolder=${encodeURIComponent(item.subfolder||"")}`);
           const isImg=item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"");
           const v=isImg
@@ -3379,6 +3399,7 @@ app.registerExtension({
           card.onmouseenter=()=>card.style.borderColor=C.lime;
           card.onmouseleave=()=>card.style.borderColor=C.border;
           galleryBox.appendChild(card);
+          _syncGalleryCurrent();
         });
       };
 
@@ -3453,6 +3474,7 @@ app.registerExtension({
         if(wasUpscale&&_upOrig){
           _upResult={filename:item.filename,subfolder:item.subfolder||""};
         }
+        if(activeRun&&job?.settings?.duration) _durationByFile[item.filename]=job.settings.duration+"s";
         if(activeRun) _showVideo(item,true);
         if(activeRun&&_upResult&&_upResult.filename===item.filename){
           cmpBtn.style.display="block";
@@ -3481,6 +3503,41 @@ app.registerExtension({
       };
       const _genTimeByFile={};
       const _seedByFile={};
+      const _durationByFile={};
+      const _resolutionByFile={};
+      const _fullscreenMetadataLoaded={};
+      _syncFullscreenDetails=()=>{
+        const isPreviewFullscreen=!!document.fullscreenElement&&previewBox.contains(document.fullscreenElement);
+        const isFullscreen=_inFullscreen||isPreviewFullscreen;
+        const show=isFullscreen&&!!outputPlayer?.fullscreenDetails;
+        fullscreenDetails.style.display=show?"flex":"none";
+        fullscreenProvider.style.display=isFullscreen&&!show?"block":"none";
+        if(!show) return;
+        const item=_curItem;
+        const filename=item?.filename||"";
+        tx(fullscreenDetailProvider,_providerLabel(item));
+        tx(fullscreenDetailFavorite,item?.favorite?"★":"☆");
+        tx(fullscreenDetailResolution,_resolutionByFile[filename]||resolutionChipVal.textContent||"—");
+        const duration=_durationByFile[filename]||"—";
+        const genTime=_genTimeByFile[filename]?fmtDur(_genTimeByFile[filename]):"—";
+        tx(fullscreenDetailTime,`${duration} · ${genTime}`);
+      };
+      const _loadFullscreenMetadata=async(item)=>{
+        const filename=item?.filename;
+        if(!filename||_fullscreenMetadataLoaded[filename]) return;
+        try{
+          const r=await fetch("/h3one/history");
+          const d=await r.json();
+          const hit=(d.items||[]).find(it=>it.video===filename&&(it.subfolder||"")===(item.subfolder||""))||(d.items||[]).find(it=>it.video===filename);
+          if(!hit) return;
+          _fullscreenMetadataLoaded[filename]=true;
+          if(hit.duration) _durationByFile[filename]=hit.duration+"s";
+          if(hit.gen_time) _genTimeByFile[filename]=hit.gen_time;
+          const size=String(hit.resolution||"").match(/(\d+)x(\d+)/i);
+          if(size) _resolutionByFile[filename]=`${size[1]}×${size[2]}`;
+          _syncFullscreenDetails();
+        }catch(e){}
+      };
       const _updateSeedChip=(filename)=>{
         let seed=_seedByFile[filename];
         if(seed===undefined||seed===null||seed===""){

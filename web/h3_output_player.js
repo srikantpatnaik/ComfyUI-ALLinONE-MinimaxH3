@@ -1,8 +1,9 @@
-export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,getItems,getCurrent,showItem,getMode}){
+export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,getItems,getCurrent,showItem,getMode,onFullscreenDetailsChange}){
   const settingsKey="one_node_minimax_h3_output_player";
   let saved={};
   try{ saved=JSON.parse(localStorage.getItem(settingsKey)||"{}"); }catch(e){ saved={}; }
-  const save=()=>{ try{ localStorage.setItem(settingsKey,JSON.stringify({muted,rateIndex,loop:vidEl.loop,globalLoop})); }catch(e){} };
+  let fullscreenDetails=saved.fullscreenDetails===true;
+  const save=()=>{ try{ localStorage.setItem(settingsKey,JSON.stringify({muted,rateIndex,loop:vidEl.loop,globalLoop,fullscreenDetails})); }catch(e){} };
   const playerControls=mk("div",{display:"none",alignItems:"center",gap:"5px",flexWrap:"wrap",padding:"2px 0"});
   const playerBtn=(label,title)=>{
     const b=mk("button",{height:"26px",minWidth:"28px",padding:"0 8px",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:"4px",border:`1px solid ${C.border}`,borderRadius:"7px",background:C.bg1,color:C.muted,fontSize:"11px",fontWeight:"700",cursor:"pointer",outline:"none"},{type:"button",title});
@@ -21,10 +22,14 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
   const playerAllLoopBtn=playerBtn("All ↻","Auto-advance through the selected outputs (A)");
   const playerFullBtn=playerBtn("⛶","Fullscreen (F)");
   const playerHelpBtn=playerBtn("?","Show player shortcuts (O)");
+  const detailsWrap=mk("label",{display:"inline-flex",alignItems:"center",gap:"4px",fontSize:"9px",color:C.muted,cursor:"pointer",whiteSpace:"nowrap"});
+  const detailsInput=mk("input",{accentColor:"var(--h3accent)",margin:"0"},{type:"checkbox",checked:fullscreenDetails,"aria-label":"Show fullscreen details"});
+  detailsInput.onchange=()=>{ fullscreenDetails=detailsInput.checked; save(); onFullscreenDetailsChange?.(fullscreenDetails); };
+  detailsWrap.append(detailsInput,mk("span",{}, {textContent:"Fullscreen details"}));
   const playerModeLbl=mk("span",{fontSize:"9px",color:C.muted,marginLeft:"2px",fontWeight:"700"},{textContent:"All outputs"});
   const playerHelp=mk("div",{position:"absolute",left:"10px",right:"10px",bottom:"10px",display:"none",padding:"8px 10px",borderRadius:"7px",background:"rgba(0,0,0,.86)",color:C.text,fontSize:"10px",lineHeight:"1.6",zIndex:"5",pointerEvents:"none"});
   tx(playerHelp,"Space play/pause · ←/→ seek 10s · ↑/↓ volume · N/B next/previous · A auto-advance · L loop · M mute · +/- speed · F fullscreen · Z zoom · 0 reset zoom");
-  playerControls.append(playerPrevBtn,playerPlayBtn,playerNextBtn,playerMuteBtn,playerSpeedBtn,playerLoopBtn,playerAllLoopBtn,playerFullBtn,playerHelpBtn,playerModeLbl);
+  playerControls.append(playerPrevBtn,playerPlayBtn,playerNextBtn,playerMuteBtn,playerSpeedBtn,playerLoopBtn,playerAllLoopBtn,playerFullBtn,playerHelpBtn,detailsWrap,playerModeLbl);
   previewBox.appendChild(playerHelp);
 
   let muted=true;
@@ -147,5 +152,5 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
     return true;
   };
 
-  return {controls:playerControls,sync,applySettings,setLoop:value=>{vidEl.loop=!!value;save();sync();},resetZoom:()=>{zoom=1;applyZoom();},handleKey};
+  return {controls:playerControls,sync,applySettings,setLoop:value=>{vidEl.loop=!!value;save();sync();},get fullscreenDetails(){return fullscreenDetails;},resetZoom:()=>{zoom=1;applyZoom();},handleKey};
 }
