@@ -7,6 +7,7 @@ import { buildRifePostprocessWorkflow, createOutputControls, normalizeOutputSett
 import { createH3OutputPlayer } from "./h3_output_player.js";
 import { attachOutputContextMenu } from "./h3_output_context.js";
 import { createH3RestoreMetadata, embedH3VideoMetadata, fetchH3RestoreMetadata } from "./h3_video_metadata.js";
+import { buildLtx25Workflow, createLtx25Panel, normalizeLtx25 } from "./h3_ltx25.js";
 
 const ACCENT_DEFAULT = "#c0a996";
 const SUPPORT_URL = "https://ko-fi.com/leonq8";
@@ -837,6 +838,7 @@ app.registerExtension({
 
     nodeType.prototype._buildUI=function(){
       const self=this;
+      self._h3Engine="h3";
       const saved=loadState();
       const hasSavedAccel=saved.quality!==undefined||saved.optSol!==undefined||saved.optCache!==undefined||saved.optSage!==undefined;
       const migrateNativeDefaults=!hasSavedAccel||(saved.settingsVersion===undefined&&saved.quality==="native"&&saved.optSol===false&&saved.optCache===false&&saved.optSage===false);
@@ -846,6 +848,7 @@ app.registerExtension({
         const initialSage=!migrateNativeDefaults&&saved.optSage===true;
         self._h3_S={
           mode:            saved.mode||"t2v",
+          ltx25:           normalizeLtx25(saved),
           prompt:          saved.prompt!==undefined?saved.prompt:"",
           resolution:      saved.resolution!==undefined?saved.resolution:"960x544 (0.5MP Balanced)",
           duration:        saved.duration!==undefined?saved.duration:5,
@@ -938,6 +941,7 @@ app.registerExtension({
           playOnFinish:S.playOnFinish,folded:S.folded,livePreview:S.livePreview,
           imgSub:S.imgSub,imgAspect:S.imgAspect,imgMP:S.imgMP,imgW:S.imgW,imgH:S.imgH,
           imgProfile:S.imgProfile,imgRefs:S.imgRefs,
+          ltx25:S.ltx25,
         });
       }
 
@@ -1091,6 +1095,17 @@ app.registerExtension({
         image:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M6 17l4-4 3 3 2-2 3 3"/>',
       };
       const MODE_SHORT={t2v:"T2V",i2v:"I2V",r2v:"R2V",audio_drive:"Audio",keyframes:"Keys",extend:"Extend",chain:"Chain",image:"Image"};
+      let _updateEngineSections=()=>{};
+      const engineTabs=mk("div",{display:"flex",gap:"3px",alignItems:"center",flexShrink:"0",padding:"2px",border:`1px solid ${C.border}`,borderRadius:"7px",background:C.bg1});
+      const engineEls={};
+      const engineButton=(key,label)=>{
+        const b=mk("button",{border:"none",borderRadius:"5px",padding:"4px 8px",fontSize:"8px",fontWeight:"700",cursor:"pointer",outline:"none",background:"transparent",color:C.muted},{type:"button",title:key==="h3"?"MiniMax H3":"LTX-2.5 Image to Video"});
+        tx(b,label);
+        b.onclick=()=>{ if(self._h3_S?.generating) return; self._h3Engine=key; _updateEngineSections(); };
+        engineEls[key]=b;engineTabs.appendChild(b);
+      };
+      engineButton("h3","H3");
+      engineButton("ltx25","LTX 2.5");
       const modesWrap=mk("div",{}, {className:"h3-modes"});
       const modeEls={};
       const _updateTabs=()=>{
@@ -1109,7 +1124,7 @@ app.registerExtension({
         modeEls[m.key]=b;modesWrap.appendChild(b);
       });
       const navRow=mk("div",{}, {className:"h3-nav"});
-      navRow.append(modesWrap,topRight);
+      navRow.append(engineTabs,modesWrap,topRight);
       const mkTopBtn=(svgPath,label,cb)=>{
         const b=mk("button",{}, {type:"button",className:"h3-topbtn",title:label,"aria-label":label});
         b.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${svgPath}</svg>`;
@@ -2096,6 +2111,8 @@ app.registerExtension({
       i2vSlots.append(_mkSlotCard("First frame",firstSlot.el),_mkSlotCard("Last frame",lastSlot.el));
       const i2vAspectRow=createI2VAspectControl({S,mk,tx,infoIcon,DD,persist,onChange:()=>_updateFramesLabel()});
       i2vArea.append(i2vSlots,i2vAspectRow);
+      const ltx25UI=createLtx25Panel({S,mk,tx,NI,DD,ImgSlot,infoIcon,persist,seedMax:H3_SEED_MAX});
+      const ltx25Area=ltx25UI.el;
       if(S.firstFrame) firstSlot._restorePreview(S.firstFrame);
       if(S.lastFrame) lastSlot._restorePreview(S.lastFrame);
 
@@ -3357,12 +3374,14 @@ app.registerExtension({
         errorBox.style.display="none";
         self._h3OutputItems=self._h3OutputItems||[];
         self._h3OutputItems.push(item);
+        const isLtx=self._h3Engine==="ltx25";
         const deferNativeRife=!!S._temporalPostRife&&!self._h3RifePostActive;
         if(deferNativeRife){
           _rifeHiddenFiles.add(item.filename);
           return;
         }
-        if(S.seed!==undefined&&S.seed!==null&&S.seed!=="") _seedByFile[item.filename]=S.seed;
+        const activeSeed=isLtx?S.ltx25.seed:S.seed;
+        if(activeSeed!==undefined&&activeSeed!==null&&activeSeed!=="") _seedByFile[item.filename]=activeSeed;
         const genMs=self._h3RifePostActive===true&&_activeNativeGenMs>0?_activeNativeGenMs:Date.now()-_activeGenStartTs;
         _genTimeByFile[item.filename]=genMs;
         const wasUpscale=_upscaleRun;
@@ -3377,17 +3396,20 @@ app.registerExtension({
         _upscaleRun="";
         _activeShownFiles.push(item.filename);
         const isTemp=item.type==="temp";
-        if(!wasUpscale&&!isTemp&&S.mode==="extend") _stageVideoForExtend(item,false);
+        if(!wasUpscale&&!isTemp&&!isLtx&&S.mode==="extend") _stageVideoForExtend(item,false);
         if(!isTemp){
-          embedH3VideoMetadata(item,restoreMetadata);
+          if(restoreMetadata) embedH3VideoMetadata(item,restoreMetadata);
           fetch("/h3one/set_output",{method:"POST",headers:{"Content-Type":"application/json"},
             body:JSON.stringify({node_id:self.id,info:{filename:item.filename,subfolder:item.subfolder||""}})}).catch(()=>{});
-          const histMode=wasUpscale?("Upscale "+S.upscaleFactor+"x ("+(wasUpscale==="upscale-rtx"?"RTX VSR":"SeedVR2")+")"):S.mode;
-          const histRes=wasUpscale?(S.upscaleFactor+"x upscale"):(S.mode==="image"?(S.imgLastW+"x"+S.imgLastH):S.resolution);
+          const histMode=wasUpscale?("Upscale "+S.upscaleFactor+"x ("+(wasUpscale==="upscale-rtx"?"RTX VSR":"SeedVR2")+")"):isLtx?"ltx25-i2v":S.mode;
+          const histRes=wasUpscale?(S.upscaleFactor+"x upscale"):isLtx?S.ltx25.resolution:(S.mode==="image"?(S.imgLastW+"x"+S.imgLastH):S.resolution);
+          const histPrompt=(isLtx?S.ltx25.prompt:S.prompt)||"";
+          const histDuration=wasUpscale?0:isLtx?S.ltx25.duration:S.duration;
+          const histSeed=isLtx?S.ltx25.seed:S.seed;
            fetch("/h3one/history",{method:"POST",headers:{"Content-Type":"application/json"},
              body:JSON.stringify({
-               mode:histMode,quality:wasUpscale?"":S.quality,prompt:(S.prompt||"").slice(0,2000),duration:wasUpscale?0:S.duration,
-               resolution:histRes,seed:S.seed,gen_time:genMs,video:item.filename,subfolder:item.subfolder||"",type:item.type||"output",
+               mode:histMode,quality:wasUpscale?"":isLtx?"native":S.quality,prompt:histPrompt.slice(0,2000),duration:histDuration,
+               resolution:histRes,seed:histSeed,gen_time:genMs,video:item.filename,subfolder:item.subfolder||"",type:item.type||"output",
                kind:item.kind==="image"?"image":"video",
              })}).catch(()=>{});
         }
@@ -3916,6 +3938,11 @@ app.registerExtension({
         }
         return wf;
       };
+      const _buildLtx25=async()=>{
+        if(!S.ltx25.firstFrame) throw new Error("LTX-2.5 I2V needs a first-frame image. Add one in the LTX 2.5 tab.");
+        if(!(S.ltx25.prompt||"").trim()) throw new Error("LTX-2.5 I2V needs a motion prompt.");
+        return buildLtx25Workflow(S.ltx25);
+      };
 
       self._h3PostprocessRife=async(items,settings)=>{
         const ids=[];
@@ -4102,11 +4129,12 @@ app.registerExtension({
 
       genBtn.onclick=async()=>{
         if(S.generating) return;
+        const isLtx=self._h3Engine==="ltx25";
         _upOrig=null;_upResult=null;
         delete S._temporalPostRife;
         self._h3OutputItems=[];
         if(_cmpMode) _exitCompare();
-        _cmpImageRefs=S.mode==="image"&&["edit","refmix"].includes(S.imgSub)?(S.imgRefs||[]).filter(Boolean).slice(0,S.imgSub==="edit"?1:9):[];
+        _cmpImageRefs=!isLtx&&S.mode==="image"&&["edit","refmix"].includes(S.imgSub)?(S.imgRefs||[]).filter(Boolean).slice(0,S.imgSub==="edit"?1:9):[];
         _cmpImageRefIndex=0;
         _syncCompareSourceSelect();
         cmpBtn.style.display="none";
@@ -4135,7 +4163,7 @@ app.registerExtension({
         progWrap.style.display="flex";setStage("Building workflow...",3);
         errorBox.style.display="none";
         _showLiveChip(false);
-        self._h3_lpOn=!!S.livePreview&&S.mode!=="image";
+        self._h3_lpOn=!!S.livePreview&&!isLtx&&S.mode!=="image";
         self._h3_lpId=(S.mode==="chain"||_shouldTemporalBatch())?"s:lp":"lp";
         if(self._h3_lpOn&&_taeChecked&&!_taeFound){
           resetBtn();
@@ -4143,12 +4171,12 @@ app.registerExtension({
           return;
         }
         try{
-          const restoreBase=await createH3RestoreMetadata(S,api);
-          const n=Math.max(1,Math.min(4,S.batch||1));
+          const restoreBase=isLtx?null:await createH3RestoreMetadata(S,api);
+          const n=isLtx?1:Math.max(1,Math.min(4,S.batch||1));
           const ids=[];
           for(let i=0;i<n;i++){
-            if(S.randomizeSeed){ S.seed=Math.floor(Math.random()*(H3_SEED_MAX+1)); seedNI._inp.value=String(S.seed); }
-            const wf=await _buildWorkflow();
+            if(!isLtx&&S.randomizeSeed){ S.seed=Math.floor(Math.random()*(H3_SEED_MAX+1)); seedNI._inp.value=String(S.seed); }
+            const wf=isLtx?await _buildLtx25():await _buildWorkflow();
             delete S._generationRes;
             if(S._memoryFitNote) setStage(S._memoryFitNote,4);
             const body={prompt:wf,client_id:api.clientId,extra_data:{enable_previews:true}};
@@ -4157,9 +4185,11 @@ app.registerExtension({
             if(data.error||!data.prompt_id){
               throw new Error(data.error?.message||JSON.stringify(data.error)||"Unknown error");
             }
-            const restoreMetadata={...restoreBase,settings:{...restoreBase.settings,seed:S.seed}};
-            self._h3RestoreMetadata=restoreMetadata;
-            self._h3MetadataByPrompt[data.prompt_id]=restoreMetadata;
+            if(restoreBase){
+              const restoreMetadata={...restoreBase,settings:{...restoreBase.settings,seed:S.seed}};
+              self._h3RestoreMetadata=restoreMetadata;
+              self._h3MetadataByPrompt[data.prompt_id]=restoreMetadata;
+            }
             ids.push(data.prompt_id);
           }
           _batchIds=ids;
@@ -4190,6 +4220,12 @@ app.registerExtension({
         const heur=list.find(m=>norm(m).includes("h3")||norm(m).includes("minimax"));
         return heur||list[0]||"";
       };
+      const _pickLtxModel=(list,needles)=>{
+        const norm=(s)=>(s||"").toLowerCase();
+        const match=list.find(m=>needles.every(n=>norm(m).includes(n)));
+        if(match) return match;
+        return list.find(m=>norm(m).includes("ltx-2.5")||norm(m).includes("ltx 2.5"))||"";
+      };
       const _loadModels=async()=>{
         try{
           const r=await fetch("/h3one/models");
@@ -4202,6 +4238,11 @@ app.registerExtension({
           if(!has(_M.diffusion,S.models.unetR2V)) S.models.unetR2V=_pickModel(_M.diffusion,"ref2va");
           if(!has(_M.vaes,S.models.vaeVideo)) S.models.vaeVideo=_pickModel(_M.vaes,"video_vae");
           if(!has(_M.vaes,S.models.vaeAudio)) S.models.vaeAudio=_pickModel(_M.vaes,"audio_vae");
+          if(!has(_M.diffusion,S.ltx25.unet)) S.ltx25.unet=_pickLtxModel(_M.diffusion,["ltx-2.5","transformer"])||S.ltx25.unet;
+          if(!has(_M.vaes,S.ltx25.videoVae)) S.ltx25.videoVae=_pickLtxModel(_M.vaes,["ltx-2.5","video-vae"])||S.ltx25.videoVae;
+          if(!has(_M.vaes,S.ltx25.audioVae)) S.ltx25.audioVae=_pickLtxModel(_M.vaes,["ltx-2.5","audio-vae"])||S.ltx25.audioVae;
+          if(!has(clipItems,S.ltx25.clip)) S.ltx25.clip=_pickLtxModel(clipItems,["ltx-2.5"])||S.ltx25.clip;
+          if(S.ltx25.lora!=="None"&&!has(_M.loras,S.ltx25.lora)) S.ltx25.lora=_pickLtxModel(_M.loras,["ltx","bb"])||"None";
           persist();
           modelDDs.unetT2V.updateItems(_M.diffusion);
           modelDDs.unetR2V.updateItems(_M.diffusion);
@@ -4264,6 +4305,24 @@ app.registerExtension({
       tuneBody.append(params,seedBody);
       const tuneCard=mk("div",{}, {className:"h3-card"});
       tuneCard.append(paramsHdr,recipeEl,tuneBody);
+      _updateEngineSections=()=>{
+        const isH3=self._h3Engine!=="ltx25";
+        Object.entries(engineEls).forEach(([key,el])=>{
+          const active=(isH3&&key==="h3")||(!isH3&&key==="ltx25");
+          el.style.background=active?C.lime:"transparent";
+          el.style.color=active?"#111":C.muted;
+        });
+        modesWrap.style.display=isH3?"":"none";
+        ltx25Area.style.display=isH3?"none":"flex";
+        loraArea.style.display=isH3?"":"none";
+        tuneCard.style.display=isH3?"":"none";
+        if(isH3){
+          _updateModeSections();
+        }else{
+          promptCard.style.display="none";
+          modeCard.style.display="none";
+        }
+      };
       const _updRecipe=()=>{
         if(!recipeEl) return;
         recipeEl.innerHTML="";
@@ -4293,7 +4352,7 @@ app.registerExtension({
       };
       _updRecipe();
       _updRecipeFn=_updRecipe;
-      leftPanel.append(promptCard,modeCard,tuneCard,loraArea);
+      leftPanel.append(promptCard,modeCard,tuneCard,loraArea,ltx25Area);
       _applyFold("prompt",promptHdr,promptWrap,promptChev);
       _applyFold("mode",modeHdr,modeArea,modeChev);
       _applyFold("params",paramsHdr,tuneBody,paramsChev);
@@ -4303,7 +4362,7 @@ app.registerExtension({
       scrollEl.appendChild(pad);
       root.append(scrollEl,settingsOverlay,historyOverlay,libraryOverlay,discoverOverlay);
       _updateTabs();
-      _updateModeSections();
+      _updateEngineSections();
       _restoreModeState();
 
       // -- Keyboard shortcut: Ctrl+Enter = Generate when hovering the node --

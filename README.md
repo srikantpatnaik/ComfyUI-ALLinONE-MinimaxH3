@@ -23,8 +23,9 @@ This fork stays close to the upstream ALL-in-ONE MiniMax H3 node and keeps its c
 - **Self-contained output restore** — H3 outputs carry the complete node settings plus the primary source image inside the video metadata; right-click an output and choose **Reuse settings** to bring the prompt, controls, models, references, and source image back into the node.
 - **Output player controls** — the output preview has play, previous, next, mute, speed, loop, fullscreen, and shortcut-help controls. Space, arrow keys, `N`/`B`, `A`, `L`, `M`, `+`/`-`, `F`, `Z`, and `0` follow the compact player behavior of the [tvandmedia player](https://github.com/srikantpatnaik/webapps/tree/main/tvandmedia); previous/next wrap within Favorites when Favorites is selected and within all output videos otherwise. Playback starts muted by default, and explicit mute, speed, loop, and auto-advance choices are remembered in the browser. When RIFE is selected, the native source stays hidden, the final output keeps the original basename, and its displayed processing time combines native generation plus RIFE processing.
 - **Older-core chain fallback** — the node probes for ComfyUI PR #15439's native arbitrary-guide support. On older ComfyUI builds it automatically falls back to a final-frame H3 anchor for Chain and temporal continuation instead of sending an incompatible graph to `MiniMaxH3MotionContext`; native Motion Context remains enabled when available.
+- **LTX-2.5 I2V tab** — the same node now includes a separate `LTX 2.5` tab beside the default `H3` tab. It builds the local two-pass LTX-2.5 image-to-video workflow, supports native resolution, duration, FPS, optional audio, EasyCache, and post-sampling RIFE, and submits exactly one final video.
 
-The additions are isolated in `web/h3_model_features.js`, `web/h3_output_features.js`, `web/h3_output_player.js`, `web/h3_i2v_aspect.js`, `web/h3_output_context.js`, `web/h3_video_metadata.js`, `h3_i2v_aspect.py`, `h3_motion_compat.py`, `h3_preserve_extension.py`, and `h3_video_metadata.py`; the main node file only contains the small integration points. Everything else below describes the upstream project.
+The additions are isolated in `web/h3_model_features.js`, `web/h3_output_features.js`, `web/h3_output_player.js`, `web/h3_i2v_aspect.js`, `web/h3_output_context.js`, `web/h3_video_metadata.js`, `web/h3_ltx25.js`, `h3_i2v_aspect.py`, `h3_motion_compat.py`, `h3_preserve_extension.py`, and `h3_video_metadata.py`; the main node file only contains the small integration points. Everything else below describes the upstream project.
 
 One node. The whole MiniMax H3 video pipeline.
 
@@ -45,6 +46,7 @@ No node graph to build, no wires to connect, no hunting through twelve custom no
 | **Extend** | Continue an existing video seamlessly |
 | **Chain** | Multi-clip continuation with H3 Motion Context (latent path, no re-encode) |
 | **Upscale** | RTX/Seed2VR Video Super Resolution hook |
+| **LTX 2.5** | Native local LTX-2.5 image-to-video workflow in the provider tab |
 
 ## Screenshots
 
@@ -74,6 +76,8 @@ Official MiniMax H3 files from [Comfy-Org/MiniMax-H3](https://huggingface.co/Com
 | `minimax_h3_video_vae_fp16.safetensors` | `vae/` |
 | `minimax_h3_audio_vae_fp32.safetensors` | `vae/` |
 
+The optional `LTX 2.5` tab expects the matching local LTX-2.5 transformer, video/audio VAE, Gemma text encoder, latent upscaler, and `ltx/bb.safetensors` LoRA in their normal ComfyUI model folders. The node detects installed LTX filenames, including the Gemma filename variants used by current LTX workflows.
+
 ### Custom nodes
 
 **T2V, I2V and R2V need nothing extra** — every node they use (H3 conditioning, sigma shift, samplers, video/audio decode, video save) ships with a recent ComfyUI. The other modes and presets use a few community packs — install only the ones you use, via ComfyUI-Manager (search by pack name), then fully restart ComfyUI and hard-refresh the browser (`Ctrl+F5`).
@@ -83,6 +87,7 @@ Official MiniMax H3 files from [Comfy-Org/MiniMax-H3](https://huggingface.co/Com
 | Mode | Packs you need |
 |------|----------------|
 | T2V / I2V / R2V | — (ComfyUI core only) |
+| LTX 2.5 I2V | LTX-2.5 model files, `rife49.pth` only when RIFE is enabled |
 | Audio Drive | [comfyui-vrgamedevgirl](https://github.com/vrgamegirl19/comfyui-vrgamedevgirl) |
 | Keyframes | [ComfyUI-H3-Motion-Context-MultiRef](https://github.com/seitanism/ComfyUI-H3-Motion-Context-MultiRef) |
 | Extend | [ComfyUI-H3-Motion-Context-MultiRef](https://github.com/seitanism/ComfyUI-H3-Motion-Context-MultiRef) |
