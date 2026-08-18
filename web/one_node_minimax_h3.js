@@ -2085,10 +2085,10 @@ app.registerExtension({
       };
 
       // I2V slots
-      const firstSlot=ImgSlot(true,n=>{S.firstFrame=n;persist();},(width,height)=>{
+      const firstSlot=ImgSlot(true,n=>{S.firstFrame=n;S.firstFrameSize=null;persist();},(width,height)=>{
         S.firstFrameSize=width&&height?{width,height}:null;persist();_updateFramesLabel();
       });
-      const lastSlot=ImgSlot(true,n=>{S.lastFrame=n;persist();},(width,height)=>{
+      const lastSlot=ImgSlot(true,n=>{S.lastFrame=n;S.lastFrameSize=null;persist();},(width,height)=>{
         S.lastFrameSize=width&&height?{width,height}:null;persist();_updateFramesLabel();
       });
       const i2vSlots=mk("div",{display:"flex",gap:"10px"});
@@ -2379,6 +2379,26 @@ app.registerExtension({
         const sourceSize=S.firstFrameSize||S.lastFrameSize||{};
         const canvas=i2vCanvasSize(result.width,result.height,S.i2vAspect,sourceSize.width,sourceSize.height);
         return {...result,...canvas,label:`${canvas.width}x${canvas.height} (${S.i2vAspect})`};
+      };
+      const _ensureI2VSourceSize=async()=>{
+        if(S.mode!=="i2v"||S.i2vAspect!=="original") return;
+        const sourceName=S.firstFrame||S.lastFrame;
+        const sourceSize=S.firstFrame?S.firstFrameSize:S.lastFrameSize;
+        if(!sourceName||sourceSize?.width>0&&sourceSize?.height>0) return;
+        await new Promise(resolve=>{
+          const image=new Image();
+          image.onload=()=>{
+            if(image.naturalWidth>0&&image.naturalHeight>0){
+              const size={width:image.naturalWidth,height:image.naturalHeight};
+              if(S.firstFrame) S.firstFrameSize=size;
+              else S.lastFrameSize=size;
+              persist();
+            }
+            resolve();
+          };
+          image.onerror=resolve;
+          image.src=api.apiURL(`/view?filename=${encodeURIComponent(sourceName)}&type=input&subfolder=`);
+        });
       };
       const _memoryFitResolution=async(res,frames)=>{
         if(!res||!frames||S.mode==="image") return res;
@@ -3776,6 +3796,7 @@ app.registerExtension({
 
       const _buildWorkflow=async()=>{
         const mode=S.mode;
+        await _ensureI2VSourceSize();
         if(_shouldTemporalBatch()) return _buildTemporalChain();
         if(mode==="chain") return _buildChain();
         if(mode==="image") return _buildImage();
