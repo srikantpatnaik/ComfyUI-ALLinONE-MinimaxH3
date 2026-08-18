@@ -3821,7 +3821,7 @@ app.registerExtension({
             trim.inputs.trim_frames=0;
           } else {
             const loadId="c"+idx+":load";
-            out[loadId]={class_type:"MiniMaxH3MotionContextLoadLatent",inputs:{latent_path:"one-node-minimax-h3/chain",clip_index:idx},_meta:{title:"Load Latent"}};
+            out[loadId]={class_type:"MiniMaxH3MotionContextLoadLatent",inputs:{latent_path:["c"+(idx-1)+":save",0],clip_index:0},_meta:{title:"Load Previous Batch Latent"}};
             mc.inputs.context_frames=["c"+(idx-1)+":trim",0];
             mc.inputs.context_latent=[loadId,0];
             mc.inputs.context_length=S.mcLength;
