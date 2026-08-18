@@ -2585,6 +2585,11 @@ app.registerExtension({
       stepsRow.append(stepsCap,stepsNI);
       const optRow=mk("div",{display:"flex",gap:"5px",flexWrap:"wrap",gridColumn:"1 / -1"});
       const _optChipSyncs=[];
+      const OPT_HELP={
+        optSol:"Optimized attention for H3. It may speed up sampling, but the first run can spend time autotuning for the current GPU and shape.",
+        optCache:"Reuses nearby H3 denoising states and can skip compatible steps. The benefit depends on the prompt and settings.",
+        optSage:"Memory-efficient attention. It can reduce VRAM use, but speed varies by GPU and resolution."
+      };
       const _mkOptChip=(key,label)=>{
         const chip=mk("button",{borderRadius:"6px",padding:"3px 9px",fontSize:"9px",fontWeight:"700",cursor:"pointer",outline:"none",transition:"background .15s,color .15s,border-color .15s"},{type:"button"});
         const _sync=()=>{
@@ -2593,7 +2598,7 @@ app.registerExtension({
           chip.style.color=on?"#111":C.muted;
           chip.style.border=`1px solid ${on?C.lime:C.border}`;
           tx(chip,(on?"✓ ":"· ")+label);
-          chip.title=(on?"Enabled":"Disabled")+" - click to "+(on?"disable":"enable");
+          chip.title=(on?"Enabled":"Disabled")+" - click to "+(on?"disable":"enable")+"\n"+OPT_HELP[key];
         };
         chip.onclick=()=>{
           S[key]=!S[key];
