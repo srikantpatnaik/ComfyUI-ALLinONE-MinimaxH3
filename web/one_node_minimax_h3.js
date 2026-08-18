@@ -3220,7 +3220,7 @@ app.registerExtension({
         getItems:_playerItems,getCurrent:()=>_curItem,getMode:()=>_galleryFavOnly,showItem:_showVideo,
         onFullscreenDetailsChange:()=>_syncFullscreenOverlay(),
       });
-      rightPanel.append(previewBox,outputPlayer.controls,timeBar,galleryWrap);
+      rightPanel.append(previewBox,timeBar,galleryWrap);
       const _stageVideoForExtend=async(item,selectMode=true)=>{
         if(!item||item.kind==="image"||/\.(png|jpe?g|webp|bmp)$/i.test(item.filename||"")) return;
         try{

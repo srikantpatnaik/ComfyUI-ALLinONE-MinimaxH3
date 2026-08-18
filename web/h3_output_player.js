@@ -4,7 +4,7 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
   try{ saved=JSON.parse(localStorage.getItem(settingsKey)||"{}"); }catch(e){ saved={}; }
   let fullscreenDetails=saved.fullscreenDetails===true;
   const save=()=>{ try{ localStorage.setItem(settingsKey,JSON.stringify({muted,rateIndex,loop:vidEl.loop,globalLoop,fullscreenDetails})); }catch(e){} };
-  const playerControls=mk("div",{display:"none",alignItems:"center",gap:"5px",flexWrap:"wrap",padding:"2px 0"});
+  const playerControls=mk("div",{display:"none",position:"absolute",left:"8px",right:"8px",bottom:"8px",zIndex:"9",alignItems:"center",gap:"5px",flexWrap:"wrap",padding:"6px 7px",borderRadius:"8px",background:"rgba(0,0,0,.78)",backdropFilter:"blur(6px)",border:"1px solid rgba(255,255,255,.12)"});
   const playerBtn=(label,title)=>{
     const b=mk("button",{height:"26px",minWidth:"28px",padding:"0 8px",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:"4px",border:`1px solid ${C.border}`,borderRadius:"7px",background:C.bg1,color:C.muted,fontSize:"11px",fontWeight:"700",cursor:"pointer",outline:"none"},{type:"button",title});
     b._lbl=mk("span",{}, {textContent:label});
@@ -30,10 +30,12 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
   const playerHelp=mk("div",{position:"absolute",left:"10px",right:"10px",bottom:"10px",display:"none",padding:"8px 10px",borderRadius:"7px",background:"rgba(0,0,0,.86)",color:C.text,fontSize:"10px",lineHeight:"1.6",zIndex:"5",pointerEvents:"none"});
   tx(playerHelp,"Space play/pause · ←/→ seek 10s · ↑/↓ volume · N/B next/previous · A auto-advance · L loop · M mute · +/- speed · F fullscreen · Z zoom · 0 reset zoom");
   playerControls.append(playerPrevBtn,playerPlayBtn,playerNextBtn,playerMuteBtn,playerSpeedBtn,playerLoopBtn,playerAllLoopBtn,playerFullBtn,playerHelpBtn,detailsWrap,playerModeLbl);
-  previewBox.appendChild(playerHelp);
+  previewBox.append(playerControls,playerHelp);
 
   let muted=true;
   let globalLoop=saved.globalLoop===true;
+  let controlsVisible=false;
+  let controlsTimer=null;
   let zoom=1;
   const rates=[0.25,0.5,0.75,1,1.25,1.5,2];
   let rateIndex=Math.max(0,Math.min(rates.length-1,Number.isInteger(saved.rateIndex)?saved.rateIndex:rates.indexOf(1)));
@@ -50,7 +52,8 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
   };
   const sync=()=>{
     const active=isVideo(getCurrent())&&vidEl.style.display!=="none";
-    playerControls.style.display=active?"flex":"none";
+    if(!active) controlsVisible=false;
+    playerControls.style.display=active&&controlsVisible?"flex":"none";
     playerModeLbl.textContent=(getMode()?"Favorites":"All outputs")+" · "+getItems().length;
     playerPlayBtn._lbl.textContent=vidEl.paused?"▶":"Ⅱ";
     playerMuteBtn._lbl.textContent=vidEl.muted?"🔇":"🔊";
@@ -60,6 +63,24 @@ export function createH3OutputPlayer({mk,C,tx,previewBox,vidEl,imgEl,isVideo,get
     playerLoopBtn.title=vidEl.loop?"Stop looping this video (L)":"Loop this video (L)";
     playerAllLoopBtn.title=globalLoop?"Stop auto-advance through the selected outputs (A)":"Auto-advance through the selected outputs (A)";
   };
+  const showControls=()=>{
+    if(!isVideo(getCurrent())||vidEl.style.display==="none") return;
+    controlsVisible=true;sync();
+    if(controlsTimer!==null) clearTimeout(controlsTimer);
+    controlsTimer=setTimeout(()=>{
+      if(!playerControls.matches(":hover")){ controlsVisible=false;sync(); }
+    },2500);
+  };
+  const hideControls=()=>{
+    if(playerControls.matches(":hover")) return;
+    controlsVisible=false;sync();
+  };
+  previewBox.addEventListener("pointermove",e=>{
+    const rect=previewBox.getBoundingClientRect();
+    if(e.clientY>=rect.bottom-90||playerControls.matches(":hover")) showControls();
+    else hideControls();
+  });
+  previewBox.addEventListener("pointerleave",hideControls);
   const cycle=(direction)=>{
     const items=getItems();
     if(!items.length) return;
