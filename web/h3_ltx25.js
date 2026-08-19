@@ -181,10 +181,10 @@ export function createLtx25Panel({S, mk, tx, NI, DD, ImgSlot, infoIcon, persist,
   const source = ImgSlot(false, name => { S.ltx25.firstFrame = name; if (!name) S.ltx25.sourceSize = null; persist(); }, (width, height) => {
     S.ltx25.sourceSize = width && height ? {width, height} : null;
     persist();
-  });
+  }, true);
   if (S.ltx25.firstFrame) source._restorePreview(S.ltx25.firstFrame);
   const sourceRow = mk("div", {display:"flex", alignItems:"center", gap:"8px"});
-  sourceRow.append(source.el, mk("div", {fontSize:"8px", color:"var(--h3-tx2)", lineHeight:"1.4", maxWidth:"180px"}, {textContent:"Required. Choose from the ComfyUI gallery or your PC."}));
+  sourceRow.append(source.el, mk("div", {fontSize:"8px", color:"var(--h3-tx2)", lineHeight:"1.4", maxWidth:"180px"}, {textContent:"Required. Choose from ComfyUI input, the gallery, or your PC."}));
 
   const resolution = DD(LTX25_RESOLUTIONS, S.ltx25.resolution, value => {
     S.ltx25.resolution = value;

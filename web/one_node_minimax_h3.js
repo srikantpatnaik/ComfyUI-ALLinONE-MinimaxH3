@@ -1,7 +1,7 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 import { createI2VAspectControl, i2vCanvasSize, normalizeI2VAspect } from "./h3_i2v_aspect.js";
-import { openComfyGalleryPicker } from "./h3_media_picker.js";
+import { openComfyGalleryPicker, openComfyInputImagePicker } from "./h3_media_picker.js";
 import { h3TextEncoderItems } from "./h3_model_features.js";
 import { buildRifePostprocessWorkflow, createOutputControls, normalizeOutputSettings, patchOutputVideo } from "./h3_output_features.js";
 import { createH3OutputPlayer } from "./h3_output_player.js";
@@ -358,9 +358,11 @@ function mkRmBtn(){
   return b;
 }
 
-function ImgSlot(optional,onFile,onSize){
+function ImgSlot(optional,onFile,onSize,includeInput=false){
   const PREVIEW_LONG=192;
-  const resetSize=()=>{wrap.style.width="72px";wrap.style.height="72px";};
+  const emptyWidth=includeInput?192:72;
+  const emptyHeight=includeInput?104:72;
+  const resetSize=()=>{wrap.style.width=`${emptyWidth}px`;wrap.style.height=`${emptyHeight}px`;};
   const fitSize=(width,height)=>{
     if(!width||!height) return;
     const ratio=Number(width)/Number(height);
@@ -370,8 +372,8 @@ function ImgSlot(optional,onFile,onSize){
     wrap.style.width=`${w}px`;wrap.style.height=`${h}px`;
   };
   const wrap=mk("div",{
-    width:"72px",height:"72px",borderRadius:"12px",
-    border:`1.5px dashed ${C.border}`,background:C.bg2,
+    width:`${emptyWidth}px`,height:`${emptyHeight}px`,borderRadius:"12px",
+    border:`1.5px dashed ${C.border}`,background:"transparent",
     display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
     cursor:"pointer",position:"relative",
     transition:"border-color .18s, background .18s",
@@ -398,42 +400,49 @@ function ImgSlot(optional,onFile,onSize){
   } else { icoWrap.append(ico,lbl); }
   const prevEl=mk("img",{
     position:"absolute",inset:"0",width:"100%",height:"100%",
-    objectFit:"contain",display:"none",borderRadius:"11px",background:"#111",
+    objectFit:"contain",display:"none",borderRadius:"11px",background:"transparent",
   });
   const rm=mkRmBtn();
   const inp=mk("input",{display:"none"},{type:"file",accept:"image/*"});
   const pasteField=mk("input",{
-    position:"absolute",top:"4px",left:"4px",right:"25px",height:"18px",boxSizing:"border-box",
-    padding:"0 4px",border:`1px solid ${C.border}`,borderRadius:"4px",background:"rgba(0,0,0,.72)",
-    color:C.text,fontSize:"7px",outline:"none",zIndex:"3",minWidth:"0",
-  },{type:"text",placeholder:"Paste image"});
+    width:"100%",height:includeInput?"100%":"17px",boxSizing:"border-box",flexShrink:"0",
+    padding:includeInput?"4px 6px":"0 4px",border:`1px solid ${C.border}`,borderRadius:"4px",background:"rgba(0,0,0,.72)",
+    color:C.text,fontSize:includeInput?"9px":"7px",textAlign:includeInput?"center":"left",outline:"none",zIndex:"3",minWidth:"0",
+  },{type:"text",placeholder:includeInput?"Paste":"Paste image"});
   const sourceBtns=mk("div",{
-    position:"absolute",left:"4px",right:"4px",bottom:"4px",display:"flex",gap:"3px",zIndex:"1",
+    position:"absolute",left:includeInput?"8px":"4px",right:includeInput?"8px":"4px",top:includeInput?"8px":"auto",bottom:includeInput?"8px":"4px",
+    display:includeInput?"grid":"flex",gridTemplateColumns:includeInput?"repeat(2,minmax(0,1fr))":"none",flexDirection:"column",
+    gap:includeInput?"6px":"2px",padding:includeInput?"6px":"3px",boxSizing:"border-box",background:C.bg2,borderRadius:"6px",zIndex:"1",
   });
   const sourceBtn=(label,cb)=>{
     const b=mk("button",{
-      flex:"1 1 0",minWidth:"0",padding:"3px 1px",border:`1px solid ${C.border}`,borderRadius:"4px",
-      background:"rgba(0,0,0,.72)",color:C.text,fontSize:"7px",lineHeight:"1",cursor:"pointer",
+      width:"100%",minWidth:"0",padding:includeInput?"4px 6px":"2px 3px",border:`1px solid ${C.border}`,borderRadius:"4px",
+      background:"rgba(0,0,0,.72)",color:C.text,fontSize:includeInput?"9px":"7px",lineHeight:"1",cursor:"pointer",
     },{type:"button"});
     tx(b,label);b.onclick=e=>{e.stopPropagation();cb();};
     return b;
   };
   sourceBtns.append(
+    ...(includeInput ? [sourceBtn("Input",()=>openComfyInputImagePicker({mk,tx,api,onSelect:name=>{
+      _restorePreview(name);onFile(name);
+    }}))] : []),
     sourceBtn("Gallery",()=>openComfyGalleryPicker({kind:"image",mk,tx,api,onSelect:name=>{
       _restorePreview(name);onFile(name);
     }})),
     sourceBtn("PC",()=>inp.click()),
   );
-  wrap.append(icoWrap,prevEl,rm,sourceBtns,pasteField,inp);
+  sourceBtns.appendChild(pasteField);
+  icoWrap.style.display="none";
+  wrap.append(icoWrap,prevEl,rm,sourceBtns,inp);
   wrap.onmouseenter=()=>{wrap.style.borderColor=C.lime;};
   wrap.onmouseleave=()=>{wrap.style.borderColor=C.border;};
   wrap.onclick=()=>{};
   let _dragDepth=0;
   wrap.addEventListener("dragenter",e=>{e.preventDefault();e.stopPropagation();_dragDepth++;wrap.style.borderColor=C.lime;wrap.style.background=C.bg1;});
   wrap.addEventListener("dragover",e=>{e.preventDefault();e.stopPropagation();});
-  wrap.addEventListener("dragleave",()=>{ _dragDepth--;if(_dragDepth<=0){_dragDepth=0;wrap.style.borderColor=C.border;wrap.style.background=C.bg2;} });
+  wrap.addEventListener("dragleave",()=>{ _dragDepth--;if(_dragDepth<=0){_dragDepth=0;wrap.style.borderColor=C.border;wrap.style.background="transparent";} });
   wrap.addEventListener("drop",e=>{
-    e.preventDefault();e.stopPropagation();_dragDepth=0;wrap.style.borderColor=C.border;wrap.style.background=C.bg2;
+    e.preventDefault();e.stopPropagation();_dragDepth=0;wrap.style.borderColor=C.border;wrap.style.background="transparent";
     const f=e.dataTransfer.files[0];if(f&&f.type.startsWith("image/"))_load(f);
   });
   let _currentName=null;
@@ -475,14 +484,17 @@ function ImgSlot(optional,onFile,onSize){
   rm.onclick=e=>{
     e.stopPropagation();
     prevEl.src="";prevEl.style.display="none";
-    rm.style.display="none";icoWrap.style.display="flex";sourceBtns.style.display="flex";
+    rm.style.display="none";icoWrap.style.display="none";sourceBtns.style.display=includeInput?"grid":"flex";
     resetSize();
-    wrap.style.borderColor=C.border;inp.value="";_currentName=null;onFile(null);
+    wrap.style.borderColor=C.border;wrap.style.background="transparent";inp.value="";_currentName=null;onFile(null);
     if(onSize) onSize(null,null);
   };
   const _restorePreview=(name)=>{
     if(!name) return;
-    const src=api.apiURL(`/view?filename=${encodeURIComponent(name)}&type=input&subfolder=`);
+    const parts=String(name).split(/[\\/]/);
+    const filename=parts.pop()||"";
+    const subfolder=parts.join("/");
+    const src=api.apiURL(`/view?filename=${encodeURIComponent(filename)}&type=input&subfolder=${encodeURIComponent(subfolder)}`);
     _currentName=name;
     _showLoaded(src,name);
   };
@@ -2163,10 +2175,10 @@ app.registerExtension({
       // I2V slots
       const firstSlot=ImgSlot(true,n=>{S.firstFrame=n;S.firstFrameSize=null;persist();},(width,height)=>{
         S.firstFrameSize=width&&height?{width,height}:null;persist();_updateFramesLabel();
-      });
+      },true);
       const lastSlot=ImgSlot(true,n=>{S.lastFrame=n;S.lastFrameSize=null;persist();},(width,height)=>{
         S.lastFrameSize=width&&height?{width,height}:null;persist();_updateFramesLabel();
-      });
+      },true);
       const i2vSlots=mk("div",{display:"flex",gap:"10px"});
       i2vSlots.append(_mkSlotCard("First frame",firstSlot.el),_mkSlotCard("Last frame",lastSlot.el));
       const i2vAspectRow=createI2VAspectControl({S,mk,tx,infoIcon,DD,persist,onChange:()=>_updateFramesLabel()});
